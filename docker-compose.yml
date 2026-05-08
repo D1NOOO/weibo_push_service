@@ -1,0 +1,13 @@
+services:
+  weibo-hotsearch:
+    image: weibo-hotsearch:latest
+    container_name: weibo-hotsearch
+    build: .
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - JWT_SECRET=WeiboHotSearchServiceSecretKey2024MustBeLongEnoughForHS256
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+    restart: unless-stopped

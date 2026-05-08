@@ -1,0 +1,11 @@
+target/
+*.class
+*.log
+.git/
+.idea/
+*.iml
+.m2/
+.maven/
+mvnw
+mvnw.cmd
+data/
