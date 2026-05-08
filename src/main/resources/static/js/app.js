@@ -275,7 +275,7 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
     const username = document.getElementById('username').value;
     const password = document.getElementById('password').value;
     const errorEl = document.getElementById('login-error');
-    
+
     try {
         const result = await fetch('/api/auth/login', {
             method: 'POST',
@@ -283,10 +283,10 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
             body: JSON.stringify({ username, password })
         });
         const data = await result.json();
-        if (!result.ok) throw new Error(data.message || '登录失败');
-        
+        if (!result.ok) throw new Error(data.message || data.error || '登录失败');
+
         API.setToken(data.token);
-        showDashboard(data.username || 'admin');
+        showDashboard(data.username || 'admin', data.mustChangePassword);
     } catch (error) {
         errorEl.textContent = error.message;
         setTimeout(() => errorEl.textContent = '', 3000);
@@ -312,7 +312,7 @@ document.getElementById('pwd-form').addEventListener('submit', async (e) => {
     }
     
     try {
-        await API.put('/api/auth/change-password', { oldPassword: oldPwd, newPassword: newPwd });
+        await API.post('/api/auth/change-password', { oldPassword: oldPwd, newPassword: newPwd });
         hideModal('pwd-modal');
         UTILS.showToast('密码修改成功', 'success');
         document.getElementById('pwd-form').reset();
@@ -1138,22 +1138,30 @@ function debounce(func, wait) {
 }
 
 // ==================== Init ====================
-function showDashboard(username) {
+function showDashboard(username, mustChangePassword) {
     document.getElementById('user-info').textContent = `@${username}`;
     document.getElementById('login-page').classList.add('hidden');
     document.getElementById('dashboard-page').classList.remove('hidden');
-    
+
     // Set theme
     State.setTheme(State.theme);
     document.getElementById('btn-theme').textContent = State.theme === 'light' ? '🌙' : '☀️';
-    
+
     // Initialize charts
     setTimeout(() => {
         try {
             ChartManager.initCharts();
         } catch (e) { console.warn('Chart initialization failed:', e); }
     }, 100);
-    
+
+    // Force password change on first login
+    if (mustChangePassword) {
+        setTimeout(() => {
+            UTILS.showToast('首次登录，请修改默认密码', 'warning');
+            showModal('pwd-modal');
+        }, 500);
+    }
+
     // Load initial tab
     loadTab('hotsearch');
 }

@@ -29,7 +29,8 @@ public class AuthService {
             throw new RuntimeException("用户名或密码错误");
         }
         String token = jwtUtil.generateToken(user.getId(), user.getUsername());
-        return new TokenResponse(token, user.getUsername());
+        return new TokenResponse(token, user.getUsername(),
+                Boolean.TRUE.equals(user.getMustChangePassword()));
     }
 
     public void changePassword(Long userId, ChangePasswordRequest req) {
@@ -39,12 +40,14 @@ public class AuthService {
             throw new RuntimeException("原密码错误");
         }
         user.setPasswordHash(passwordEncoder.encode(req.newPassword()));
+        user.setMustChangePassword(false);
         userRepository.save(user);
     }
 
     public void initDefaultAdmin() {
         if (!userRepository.existsByUsername("admin")) {
             User admin = new User("admin", passwordEncoder.encode("admin123"), "ADMIN");
+            admin.setMustChangePassword(true);
             userRepository.save(admin);
         }
     }

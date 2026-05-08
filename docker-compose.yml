@@ -8,6 +8,6 @@ services:
     volumes:
       - ./data:/app/data
     environment:
-      - JWT_SECRET=WeiboHotSearchServiceSecretKey2024MustBeLongEnoughForHS256
+      - JWT_SECRET=${JWT_SECRET:-}
       - SPRING_JPA_HIBERNATE_DDL_AUTO=update
     restart: unless-stopped

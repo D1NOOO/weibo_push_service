@@ -35,6 +35,14 @@ public class SubscriptionController {
         return ResponseEntity.ok(subscriptionService.listByUser(getUserId(authHeader)));
     }
 
+    @GetMapping("/{id}")
+    @Operation(summary = "获取单个订阅")
+    public ResponseEntity<SubscriptionResponse> getById(
+            @RequestHeader("Authorization") String authHeader,
+            @PathVariable Long id) {
+        return ResponseEntity.ok(subscriptionService.getById(getUserId(authHeader), id));
+    }
+
     @PostMapping
     @Operation(summary = "创建订阅")
     public ResponseEntity<SubscriptionResponse> create(

@@ -41,6 +41,13 @@ public class ChannelService {
         return toResponse(channelRepository.save(ch));
     }
 
+    public ChannelResponse getById(Long userId, Long id) {
+        Channel ch = channelRepository.findById(id)
+                .filter(c -> c.getUserId().equals(userId))
+                .orElseThrow(() -> new RuntimeException("通道不存在"));
+        return toResponse(ch);
+    }
+
     public void delete(Long userId, Long id) {
         Channel ch = channelRepository.findById(id)
                 .filter(c -> c.getUserId().equals(userId))

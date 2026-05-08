@@ -47,6 +47,13 @@ public class SubscriptionService {
         return toResponse(subscriptionRepository.save(sub));
     }
 
+    public SubscriptionResponse getById(Long userId, Long id) {
+        Subscription sub = subscriptionRepository.findById(id)
+                .filter(s -> s.getUserId().equals(userId))
+                .orElseThrow(() -> new RuntimeException("订阅不存在"));
+        return toResponse(sub);
+    }
+
     public void delete(Long userId, Long id) {
         Subscription sub = subscriptionRepository.findById(id)
                 .filter(s -> s.getUserId().equals(userId))
