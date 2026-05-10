@@ -277,7 +277,10 @@ header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
     background: var(--card); border-radius: var(--radius); padding: 20px;
     border: 1px solid var(--border); margin-bottom: 20px;
     transition: all var(--transition);
+    overflow: hidden;
 }
+#chart-labels { max-height: 180px; }
+#chart-heat { max-height: 280px; }
 .chart-container:hover { box-shadow: var(--shadow); }
 .chart-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--text-secondary); }
 
@@ -316,6 +319,11 @@ header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
 }
 .log-status.success { background: var(--success-bg); color: var(--success); }
 .log-status.failed { background: var(--danger-bg); color: var(--danger); }
+
+.log-kw-list { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+.log-kw { font-weight: 600; font-size: 13px; }
+.log-kw em { font-style: normal; color: var(--primary); font-size: 11px; margin-left: 2px; }
+.log-kw small { color: var(--text-light); font-size: 11px; margin-left: 2px; }
 
 /* ==================== Modal ==================== */
 .modal {
@@ -437,14 +445,6 @@ select:focus { outline: none; border-color: var(--primary); }
 .freshness-banner:hover { box-shadow: var(--shadow-sm); }
 .freshness-title { font-weight: 700; margin-bottom: 4px; font-size: 14px; }
 .freshness-time { color: var(--primary); font-weight: 700; }
-
-/* ==================== Keyboard Shortcut Hint ==================== */
-.kbd {
-    display: inline-block; padding: 2px 6px; font-size: 11px;
-    font-family: var(--font-mono); background: var(--bg-secondary);
-    border: 1px solid var(--border); border-radius: 4px;
-    color: var(--text-light); line-height: 1.4;
-}
 
 /* ==================== Export Buttons ==================== */
 .export-group { display: flex; gap: 6px; }

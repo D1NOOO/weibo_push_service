@@ -47,13 +47,13 @@ public class GenericWebhookProvider implements MessageProvider {
             payload.put("timestamp", LocalDateTime.now().toString());
 
             String json = objectMapper.writeValueAsString(payload);
-            Jsoup.connect(webhookUrl)
+            var resp = Jsoup.connect(webhookUrl)
                     .requestBody(json)
                     .header("Content-Type", "application/json")
                     .ignoreContentType(true)
-                    .post();
+                    .execute();
 
-            log.info("通用Webhook推送成功: keyword={}", primaryItem.keyword());
+            log.info("通用Webhook推送完成: keyword={}, status={}", primaryItem.keyword(), resp.statusCode());
         } catch (Exception e) {
             throw new RuntimeException("通用Webhook推送失败: " + e.getMessage(), e);
         }

@@ -51,11 +51,19 @@ public class DingtalkProvider implements MessageProvider {
             body.put("text", Map.of("content", text.toString()));
 
             String json = objectMapper.writeValueAsString(body);
-            Jsoup.connect(webhookUrl)
+            String resp = Jsoup.connect(webhookUrl)
                     .requestBody(json)
                     .header("Content-Type", "application/json")
                     .ignoreContentType(true)
-                    .post();
+                    .post()
+                    .body().text();
+
+            Map<String, Object> respMap = objectMapper.readValue(resp, Map.class);
+            Object errcode = respMap.get("errcode");
+            if (errcode instanceof Number && ((Number) errcode).intValue() != 0) {
+                String errmsg = respMap.get("errmsg") != null ? respMap.get("errmsg").toString() : "未知错误";
+                throw new RuntimeException("钉钉返回错误 errcode=" + errcode + ": " + errmsg);
+            }
 
             log.info("钉钉推送成功: keyword={}", primaryItem.keyword());
         } catch (Exception e) {

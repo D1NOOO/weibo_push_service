@@ -29,6 +29,9 @@ public class DeliveryLog {
 
     private String error;
 
+    @Column(name = "batch_id")
+    private String batchId;
+
     @Column(name = "delivered_at", nullable = false)
     private LocalDateTime deliveredAt;
 
@@ -50,6 +53,8 @@ public class DeliveryLog {
     public void setStatus(String status) { this.status = status; }
     public String getError() { return error; }
     public void setError(String error) { this.error = error; }
+    public String getBatchId() { return batchId; }
+    public void setBatchId(String batchId) { this.batchId = batchId; }
     public LocalDateTime getDeliveredAt() { return deliveredAt; }
     public void setDeliveredAt(LocalDateTime deliveredAt) { this.deliveredAt = deliveredAt; }
 }

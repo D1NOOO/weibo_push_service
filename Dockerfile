@@ -1,8 +1,8 @@
-# 使用 Docker Hub 官方镜像
-FROM eclipse-temurin:21-jdk-alpine as builder
+FROM maven:3.9-eclipse-temurin-21-alpine as builder
 WORKDIR /app
-COPY . .
-RUN apk add --no-cache maven
+COPY pom.xml settings.xml ./
+RUN mkdir -p /root/.m2 && cp settings.xml /root/.m2/settings.xml && mvn dependency:go-offline -DskipTests
+COPY src/ src/
 RUN mvn clean package -DskipTests
 
 FROM eclipse-temurin:21-jre-alpine

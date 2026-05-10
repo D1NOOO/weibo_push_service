@@ -3,7 +3,6 @@ package com.hotsearch.controller;
 import com.hotsearch.service.PipelineService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,9 +16,6 @@ public class ConfigController {
 
     private final PipelineService pipelineService;
 
-    @Value("${app.dedupe.window-hours:6}")
-    private int dedupeWindowHours;
-
     public ConfigController(PipelineService pipelineService) {
         this.pipelineService = pipelineService;
     }
@@ -28,8 +24,22 @@ public class ConfigController {
     @Operation(summary = "获取当前应用配置")
     public ResponseEntity<Map<String, Object>> getConfig() {
         Map<String, Object> config = new HashMap<>();
-        config.put("dedupeWindowHours", dedupeWindowHours);
-        config.put("description", "当前去重窗口时间，表示在多长时间内对同一个话题不再重复推送");
+        config.put("dedupeWindowHours", pipelineService.getDedupeWindowHours());
+        return ResponseEntity.ok(config);
+    }
+
+    @PutMapping
+    @Operation(summary = "更新应用配置")
+    public ResponseEntity<Map<String, Object>> updateConfig(@RequestBody Map<String, Object> body) {
+        if (body.containsKey("dedupeWindowHours")) {
+            int hours = ((Number) body.get("dedupeWindowHours")).intValue();
+            if (hours < 1 || hours > 168) {
+                throw new RuntimeException("去重窗口时间必须在 1-168 小时之间");
+            }
+            pipelineService.setDedupeWindowHours(hours);
+        }
+        Map<String, Object> config = new HashMap<>();
+        config.put("dedupeWindowHours", pipelineService.getDedupeWindowHours());
         return ResponseEntity.ok(config);
     }
 }

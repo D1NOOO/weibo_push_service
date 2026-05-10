@@ -5,6 +5,7 @@ import com.hotsearch.dto.SubscriptionResponse;
 import com.hotsearch.entity.Subscription;
 import com.hotsearch.repository.SubscriptionRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -22,6 +23,7 @@ public class SubscriptionService {
                 .map(this::toResponse).toList();
     }
 
+    @Transactional
     public SubscriptionResponse create(Long userId, SubscriptionRequest req) {
         Subscription sub = new Subscription();
         sub.setUserId(userId);
@@ -34,6 +36,7 @@ public class SubscriptionService {
         return toResponse(subscriptionRepository.save(sub));
     }
 
+    @Transactional
     public SubscriptionResponse update(Long userId, Long id, SubscriptionRequest req) {
         Subscription sub = subscriptionRepository.findById(id)
                 .filter(s -> s.getUserId().equals(userId))
@@ -54,6 +57,7 @@ public class SubscriptionService {
         return toResponse(sub);
     }
 
+    @Transactional
     public void delete(Long userId, Long id) {
         Subscription sub = subscriptionRepository.findById(id)
                 .filter(s -> s.getUserId().equals(userId))

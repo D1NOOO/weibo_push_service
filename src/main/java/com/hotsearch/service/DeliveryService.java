@@ -1,13 +1,13 @@
 package com.hotsearch.service;
 
-import com.hotsearch.dto.DeliveryLogResponse;
+import com.hotsearch.dto.DeliveryBatchResponse;
 import com.hotsearch.entity.DeliveryLog;
 import com.hotsearch.repository.ChannelRepository;
 import com.hotsearch.repository.DeliveryLogRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -29,28 +29,50 @@ public class DeliveryService {
         return deliveryLogRepository.existsByKeywordAndChannelIdAndDeliveredAtAfter(keyword, channelId, since);
     }
 
-    public List<DeliveryLogResponse> getRecentLogs(int hours) {
+    public List<DeliveryBatchResponse> getRecentBatches(int hours) {
         LocalDateTime since = LocalDateTime.now().minusHours(hours);
-        return deliveryLogRepository.findByDeliveredAtAfterOrderByDeliveredAtDesc(since).stream()
-                .map(l -> new DeliveryLogResponse(l.getId(), l.getSubscriptionId(), l.getChannelId(),
-                        l.getKeyword(), l.getLabel(), l.getHotValue(), l.getStatus(), l.getError(), l.getDeliveredAt()))
-                .toList();
+        List<DeliveryLog> logs = deliveryLogRepository.findByDeliveredAtAfterOrderByDeliveredAtDesc(since);
+        return groupIntoBatches(logs);
     }
 
-    public List<DeliveryLogResponse> getRecentLogsByUser(Long userId, int hours) {
+    public List<DeliveryBatchResponse> getRecentBatchesByUser(Long userId, int hours) {
         LocalDateTime since = LocalDateTime.now().minusHours(hours);
-        
+
         List<Long> userChannelIds = channelRepository.findByUserId(userId)
                 .stream()
                 .map(ch -> ch.getId())
                 .collect(Collectors.toList());
-        
+
         if (userChannelIds.isEmpty()) return List.of();
-        
-        return deliveryLogRepository.findByChannelIdInAndDeliveredAtAfterOrderByDeliveredAtDesc(userChannelIds, since)
-                .stream()
-                .map(l -> new DeliveryLogResponse(l.getId(), l.getSubscriptionId(), l.getChannelId(),
-                        l.getKeyword(), l.getLabel(), l.getHotValue(), l.getStatus(), l.getError(), l.getDeliveredAt()))
+
+        List<DeliveryLog> logs = deliveryLogRepository.findByChannelIdInAndDeliveredAtAfterOrderByDeliveredAtDesc(userChannelIds, since);
+        return groupIntoBatches(logs);
+    }
+
+    private List<DeliveryBatchResponse> groupIntoBatches(List<DeliveryLog> logs) {
+        Map<String, List<DeliveryLog>> grouped = logs.stream()
+                .collect(Collectors.groupingBy(
+                        l -> l.getBatchId() != null ? l.getBatchId() : "legacy_" + l.getId(),
+                        LinkedHashMap::new,
+                        Collectors.toList()
+                ));
+
+        return grouped.values().stream()
+                .map(batch -> {
+                    DeliveryLog first = batch.get(0);
+                    List<DeliveryBatchResponse.KeywordEntry> keywords = batch.stream()
+                            .map(l -> new DeliveryBatchResponse.KeywordEntry(l.getKeyword(), l.getLabel(), l.getHotValue()))
+                            .toList();
+                    return new DeliveryBatchResponse(
+                            first.getBatchId(),
+                            first.getSubscriptionId(),
+                            first.getChannelId(),
+                            first.getStatus(),
+                            first.getError(),
+                            keywords,
+                            first.getDeliveredAt()
+                    );
+                })
                 .toList();
     }
 }

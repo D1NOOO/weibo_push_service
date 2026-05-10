@@ -26,12 +26,15 @@ public class SubscriptionMatcher {
     }
 
     private boolean hit(Subscription sub, HotSearchItem item) {
+        // Never match ads
+        if (item.isAd()) return false;
+
         List<String> keywords = sub.getKeywords();
-        if (keywords == null || keywords.isEmpty()) return false;
-        
-        // Support regex matching: if keyword starts with "regex:", treat as pattern
-        boolean keywordMatch = keywords.stream().anyMatch(k -> matchKeyword(k, item.keyword()));
-        if (!keywordMatch) return false;
+        // Empty keywords = match any keyword (user may only want label/heat filtering)
+        if (keywords != null && !keywords.isEmpty()) {
+            boolean keywordMatch = keywords.stream().anyMatch(k -> matchKeyword(k, item.keyword()));
+            if (!keywordMatch) return false;
+        }
 
         List<String> excludeKeywords = sub.getExcludeKeywords();
         if (excludeKeywords != null && excludeKeywords.stream().anyMatch(k -> matchKeyword(k, item.keyword()))) {
@@ -39,12 +42,16 @@ public class SubscriptionMatcher {
         }
 
         List<String> labels = sub.getLabels();
-        if (labels != null && !labels.isEmpty() && item.label() != null && !labels.contains(item.label())) {
-            return false;
+        if (labels != null && !labels.isEmpty()) {
+            if (item.label() == null || !labels.contains(item.label())) {
+                return false;
+            }
         }
 
-        if (sub.getMinHotValue() != null && item.hotValue() != null && item.hotValue() < sub.getMinHotValue()) {
-            return false;
+        if (sub.getMinHotValue() != null) {
+            if (item.hotValue() == null || item.hotValue() < sub.getMinHotValue()) {
+                return false;
+            }
         }
 
         return true;

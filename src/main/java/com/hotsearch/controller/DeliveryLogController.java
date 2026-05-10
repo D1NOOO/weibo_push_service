@@ -1,6 +1,6 @@
 package com.hotsearch.controller;
 
-import com.hotsearch.dto.DeliveryLogResponse;
+import com.hotsearch.dto.DeliveryBatchResponse;
 import com.hotsearch.service.DeliveryService;
 import com.hotsearch.util.JwtUtil;
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,12 +29,12 @@ public class DeliveryLogController {
 
     @GetMapping
     @Operation(summary = "获取个人推送日志")
-    public ResponseEntity<List<DeliveryLogResponse>> getRecentForUser(
+    public ResponseEntity<List<DeliveryBatchResponse>> getRecentForUser(
             @RequestHeader("Authorization") String authHeader,
             @RequestParam(defaultValue = "24") int hours) {
         // Limit hours to reasonable range (1-168 hours = 1 week max)
         int safeHours = Math.max(1, Math.min(hours, 168));
         Long userId = getUserId(authHeader);
-        return ResponseEntity.ok(deliveryService.getRecentLogsByUser(userId, safeHours));
+        return ResponseEntity.ok(deliveryService.getRecentBatchesByUser(userId, safeHours));
     }
 }

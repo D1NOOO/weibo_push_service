@@ -70,7 +70,6 @@ class AppState {
         this.currentTab = 'hotsearch';
         this.autoRefresh = null;
         
-        this.appliedShortcuts = new Set();
         this.currentChart = null;
         this.heatChart = null;
     }
@@ -124,7 +123,8 @@ const UTILS = {
     },
     formatTime(t) {
         if (!t) return '-';
-        const d = new Date(t.replace(' ', 'T'));
+        if (typeof t === 'number') t = new Date(t).toISOString();
+        const d = new Date(t.replace(' ', 'T') + (t.includes('Z') || t.includes('+') ? '' : 'Z'));
         if (isNaN(d.getTime())) return '-';
         const now = new Date();
         const diff = now - d;
@@ -205,7 +205,7 @@ const ChartManager = {
             },
             options: {
                 responsive: true,
-                maintainAspectRatio: false,
+                maintainAspectRatio: true,
                 plugins: {
                     legend: { display: false },
                     tooltip: {
@@ -261,9 +261,9 @@ const ChartManager = {
     
     updateHeatData(data) {
         if (!this.heatChart) return;
-        
+
         this.heatChart.data.labels = data.labels;
-        this.labelChart.data.datasets[0].data = data.values;
+        this.heatChart.data.datasets[0].data = data.values;
         this.heatChart.update();
     }
 };
@@ -590,7 +590,7 @@ async function loadConfig() {
         document.getElementById('current-dedupe-hours').textContent = currentHours;
         document.getElementById('dedupe-hours').value = currentHours;
         document.getElementById('btn-save-config').disabled = true;
-        
+
         document.getElementById('dedupe-hours').onchange = () => {
             const newVal = document.getElementById('dedupe-hours').value;
             document.getElementById('btn-save-config').disabled = (parseInt(newVal) === currentHours);
@@ -598,105 +598,19 @@ async function loadConfig() {
     } catch (e) { console.warn('加载配置失败:', e.message); }
 }
 
-document.getElementById('btn-save-config').addEventListener('click', () => {
-    const hours = document.getElementById('dedupe-hours').value;
-    if (confirm('修改系统配置需要重启应用才能生效，确定继续？')) {
-        UTILS.showToast(`已记录配置变更（新去重窗口: ${hours}小时），请手动重启服务应用新配置`, 'warning');
+document.getElementById('btn-save-config').addEventListener('click', async () => {
+    const hours = parseInt(document.getElementById('dedupe-hours').value);
+    try {
+        await API.put('/api/config', { dedupeWindowHours: hours });
+        document.getElementById('current-dedupe-hours').textContent = hours;
         document.getElementById('btn-save-config').disabled = true;
+        UTILS.showToast(`去重窗口已更新为 ${hours} 小时`, 'success');
+    } catch (err) {
+        UTILS.showToast('保存失败: ' + err.message, 'error');
     }
 });
 
-// ==================== Keyboard Shortcuts ====================
-document.addEventListener('keydown', (e) => {
-    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-    const cmdKey = isMac ? e.metaKey : e.ctrlKey;
-    const key = e.key.toLowerCase();
-    
-    // Global shortcuts
-    if (cmdKey && key === 'k') {
-        e.preventDefault();
-        showModal('search-modal');
-        document.getElementById('global-search-input').focus();
-        return;
-    }
-    
-    if (cmdKey && key === 't') {
-        e.preventDefault();
-        State.toggleTheme();
-        return;
-    }
-    
-    // Tab switching with 1-5
-    if (!cmdKey && !e.altKey && !e.shiftKey && key >= '1' && key <= '5') {
-        const tabIndex = parseInt(key) - 1;
-        const tabs = Array.from(document.querySelectorAll('.tab'));
-        if (tabs[tabIndex]) {
-            tabs[tabIndex].click();
-        }
-    }
-    
-    // R = refresh
-    if (key === 'r' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
-        loadHotSearch();
-    }
-    
-    // Escape = close modals
-    if (key === 'escape') {
-        const modals = Array.from(document.querySelectorAll('.modal:not(.hidden)'));
-        if (modals.length > 0) {
-            hideModal(modals[0].id);
-        }
-    }
-});
-
-// Global search
-document.getElementById('global-search-input').addEventListener('input', (e) => {
-    const term = e.target.value.toLowerCase().trim();
-    const results = document.getElementById('global-search-results');
-    
-    if (!term) {
-        results.innerHTML = '<p style="text-align:center;color:var(--text-light);padding:20px;">输入关键词搜索</p>';
-        return;
-    }
-    
-    const items = State.allItems;
-    const matches = items.filter(item => 
-        item.keyword && item.keyword.toLowerCase().includes(term)
-    ).slice(0, 10);
-    
-    if (!matches.length) {
-        results.innerHTML = '<p style="text-align:center;color:var(--text-light);padding:20px;">未找到匹配结果</p>';
-        return;
-    }
-    
-    results.innerHTML = matches.map(item => `
-        <div class="card" style="margin-bottom:6px;cursor:pointer;padding:12px;" onclick="window.scrollToItem('${UTILS.escape(item.keyword)}')">
-            <span class="hot-rank" style="margin-right:8px;">${item.rank || '?'}</span>
-            <span>${UTILS.escape(item.keyword)}</span>
-            ${item.label ? `<span class="hot-label ${UTILS.getLabelClass(item.label)}" style="margin-left:auto;">${UTILS.escape(item.label)}</span>` : ''}
-        </div>
-    `).join('');
-});
-
-window.scrollToItem = function(keyword) {
-    hideModal('search-modal');
-    // Scroll to matching item in hotsearch list
-    const items = State.allItems;
-    const index = items.findIndex(item => item.keyword === keyword);
-    if (index !== -1) {
-        document.querySelectorAll('.tab')[0].click(); // Switch to hotsearch tab
-        setTimeout(() => {
-            const container = document.getElementById('hotsearch-list');
-            const cards = container.querySelectorAll('.card');
-            if (cards[index]) {
-                cards[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
-                cards[index].animate([{ backgroundColor: 'rgba(255,107,53,0.1)' }, { backgroundColor: 'transparent' }], { duration: 1500 });
-            }
-        }, 300);
-    }
-};
-
-// ==================== Subscription Functions ==================== 
+// ==================== Subscription Functions ====================
 let editingSubscriptionId = null;
 
 function loadSubscriptions() {
@@ -1070,32 +984,41 @@ function loadLogs() {
         }
         
         setTimeout(() => {
-            container.innerHTML = logs.map(log => `
-                <div class="log-card" title="${getLogTooltip(log)}">
-                    <span class="log-status ${log.status === 'SUCCESS' ? 'success' : 'failed'}">${log.status}</span>
-                    <div style="flex:1;min-width:0;">
-                        <div style="font-weight:600;margin-bottom:2px;">${UTILS.escape(log.keyword)}</div>
-                        <div style="font-size:11px;color:var(--text-light);">
-                            ${log.label ? `[${UTILS.escape(log.label)}] ` : ''}
-                            ${log.hotValue ? `热度: ${UTILS.formatNum(log.hotValue)} • ` : ''}
-                            ${UTILS.formatTime(log.deliveredAt)}
+            container.innerHTML = logs.map(batch => {
+                const kwList = batch.keywords.map(k => {
+                    let s = `<span class="log-kw">${UTILS.escape(k.keyword)}`;
+                    if (k.label) s += ` <em>[${UTILS.escape(k.label)}]</em>`;
+                    if (k.hotValue) s += ` <small>${UTILS.formatNum(k.hotValue)}</small>`;
+                    s += '</span>';
+                    return s;
+                }).join('');
+
+                return `
+                    <div class="log-card" title="${getLogTooltip(batch)}">
+                        <span class="log-status ${batch.status === 'SUCCESS' ? 'success' : 'failed'}">${batch.status}</span>
+                        <div style="flex:1;min-width:0;">
+                            <div class="log-kw-list">${kwList}</div>
+                            <div style="font-size:11px;color:var(--text-light);margin-top:4px;">
+                                ${UTILS.formatTime(batch.deliveredAt)} · ${batch.keywords.length}条匹配
+                            </div>
                         </div>
                     </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }, 200);
     }).catch(err => {
         container.innerHTML = `<div class="empty"><div class="empty-icon">️⚠️</div><p>加载失败: ${UTILS.escape(err.message)}</p></div>`;
     });
 }
 
-function getLogTooltip(log) {
-    let tooltip = `关键词: ${log.keyword}\n`;
-    tooltip += `状态: ${log.status}\n`;
-    tooltip += `时间: ${log.deliveredAt}\n`;
-    if (log.label) tooltip += `标签: ${log.label}\n`;
-    if (log.hotValue) tooltip += `热度: ${log.hotValue}\n`;
-    if (log.error) tooltip += `错误: ${log.error}\n`;
+function getLogTooltip(batch) {
+    let tooltip = `状态: ${batch.status}\n`;
+    tooltip += `时间: ${batch.deliveredAt}\n`;
+    tooltip += `匹配: ${batch.keywords.length}条\n`;
+    if (batch.keywords.length) {
+        tooltip += `关键词: ${batch.keywords.map(k => k.keyword).join(', ')}\n`;
+    }
+    if (batch.error) tooltip += `错误: ${batch.error}\n`;
     return tooltip.trim();
 }
 
@@ -1111,7 +1034,6 @@ function showModal(modalId) {
     if (!modal) return;
     lastFocusedElement = document.activeElement;
     modal.classList.remove('hidden');
-    document.getElementById('global-search-input')?.focus();
 }
 
 function hideModal(modalId) {
@@ -1147,11 +1069,12 @@ function showDashboard(username, mustChangePassword) {
     State.setTheme(State.theme);
     document.getElementById('btn-theme').textContent = State.theme === 'light' ? '🌙' : '☀️';
 
-    // Initialize charts
+    // Initialize charts then load initial tab
     setTimeout(() => {
         try {
             ChartManager.initCharts();
         } catch (e) { console.warn('Chart initialization failed:', e); }
+        loadTab('hotsearch');
     }, 100);
 
     // Force password change on first login
@@ -1161,9 +1084,6 @@ function showDashboard(username, mustChangePassword) {
             showModal('pwd-modal');
         }, 500);
     }
-
-    // Load initial tab
-    loadTab('hotsearch');
 }
 
 // Auto login if token exists

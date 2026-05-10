@@ -8,6 +8,7 @@ import com.hotsearch.repository.UserRepository;
 import com.hotsearch.util.JwtUtil;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AuthService {
@@ -33,6 +34,7 @@ public class AuthService {
                 Boolean.TRUE.equals(user.getMustChangePassword()));
     }
 
+    @Transactional
     public void changePassword(Long userId, ChangePasswordRequest req) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("用户不存在"));

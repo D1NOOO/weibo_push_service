@@ -16,8 +16,11 @@ public class JwtUtil {
     private final long expirationMs;
 
     public JwtUtil(
-            @Value("${jwt.secret:defaultSecretKeyThatIsLongEnoughForHS256Algorithm}") String secret,
+            @Value("${jwt.secret}") String secret,
             @Value("${jwt.expiration-ms:86400000}") long expirationMs) {
+        if (secret == null || secret.isBlank() || secret.equals("changeme")) {
+            throw new IllegalStateException("JWT_SECRET 必须设置，不能使用默认值");
+        }
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expirationMs = expirationMs;
     }

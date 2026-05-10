@@ -73,11 +73,18 @@ public class TelegramProvider implements MessageProvider {
             body.put("parse_mode", "Markdown");
 
             String json = objectMapper.writeValueAsString(body);
-            Jsoup.connect(apiUrl)
+            String resp = Jsoup.connect(apiUrl)
                     .requestBody(json)
                     .header("Content-Type", "application/json")
                     .ignoreContentType(true)
-                    .post();
+                    .post()
+                    .body().text();
+
+            Map<String, Object> respMap = objectMapper.readValue(resp, Map.class);
+            if (!Boolean.TRUE.equals(respMap.get("ok"))) {
+                String desc = respMap.get("description") != null ? respMap.get("description").toString() : "未知错误";
+                throw new RuntimeException("Telegram返回错误: " + desc);
+            }
 
             log.info("Telegram推送成功: keyword={}", primaryItem.keyword());
         } catch (Exception e) {

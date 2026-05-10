@@ -50,7 +50,14 @@ public class HotSearchController {
     public ResponseEntity<List<Map<String, Object>>> getKeywordTrend(
             @RequestParam String keyword,
             @RequestParam(defaultValue = "24") int hours) {
+        if (keyword == null || keyword.isBlank()) {
+            throw new RuntimeException("关键词不能为空");
+        }
+        if (keyword.length() > 200) {
+            throw new RuntimeException("关键词长度不能超过200字符");
+        }
         int safeHours = Math.max(1, Math.min(hours, 168));
-        return ResponseEntity.ok(hotSearchService.getKeywordTrend(keyword, safeHours));
+        return ResponseEntity.ok(hotSearchService.getKeywordTrend(keyword.trim(), safeHours));
     }
+
 }

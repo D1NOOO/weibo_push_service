@@ -15,13 +15,16 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 @Service
 public class PipelineService {
 
     private static final Logger log = LoggerFactory.getLogger(PipelineService.class);
+
+    private final AtomicBoolean running = new AtomicBoolean(false);
 
     private final WeiboFetcher weiboFetcher;
     private final HotSearchService hotSearchService;
@@ -32,7 +35,10 @@ public class PipelineService {
     private final Map<String, MessageProvider> providerMap;
 
     @Value("${app.dedupe.window-hours:6}")
-    private int dedupeWindowHours;
+    private volatile int dedupeWindowHours;
+
+    public int getDedupeWindowHours() { return dedupeWindowHours; }
+    public void setDedupeWindowHours(int hours) { this.dedupeWindowHours = hours; }
 
     public PipelineService(WeiboFetcher weiboFetcher, HotSearchService hotSearchService,
                            SubscriptionService subscriptionService, ChannelService channelService,
@@ -54,6 +60,18 @@ public class PipelineService {
     }
 
     public void runPipeline() {
+        if (!running.compareAndSet(false, true)) {
+            log.warn("管线正在执行中，跳过本次触发");
+            return;
+        }
+        try {
+            doRunPipeline();
+        } finally {
+            running.set(false);
+        }
+    }
+
+    private void doRunPipeline() {
         // 1. Fetch
         List<HotSearchItem> items = hotSearchService.fetchAndSave();
         if (items.isEmpty()) {
@@ -69,50 +87,69 @@ public class PipelineService {
             return;
         }
 
-        // 3. Dedupe + Deliver
+        // 3. Group by subscription, dedupe, then deliver one message per sub-channel
         List<Channel> channels = channelService.listAllEnabled();
         LocalDateTime dedupeSince = LocalDateTime.now().minusHours(dedupeWindowHours);
 
-        for (MatchResult match : matches) {
+        Map<Long, List<MatchResult>> matchesBySub = matches.stream()
+                .collect(Collectors.groupingBy(m -> m.subscription().getId(), LinkedHashMap::new, Collectors.toList()));
+
+        for (var entry : matchesBySub.entrySet()) {
+            List<MatchResult> subMatches = entry.getValue();
+            Subscription sub = subMatches.get(0).subscription();
+
             for (Channel channel : channels) {
-                if (!channel.getUserId().equals(match.subscription().getUserId())) continue;
+                if (!channel.getUserId().equals(sub.getUserId())) continue;
 
-                // Dedupe check
-                if (deliveryService.isDuplicate(match.item().keyword(), channel.getId(), dedupeSince)) {
-                    log.debug("去重跳过: keyword={}, channelId={}", match.item().keyword(), channel.getId());
-                    continue;
+                // Dedupe: filter out already-delivered keywords
+                List<MatchResult> toDeliver = new ArrayList<>();
+                for (MatchResult m : subMatches) {
+                    if (!deliveryService.isDuplicate(m.item().keyword(), channel.getId(), dedupeSince)) {
+                        toDeliver.add(m);
+                    }
                 }
+                if (toDeliver.isEmpty()) continue;
 
-                // Deliver
-                DeliveryLog deliveryLog = new DeliveryLog();
-                deliveryLog.setSubscriptionId(match.subscription().getId());
-                deliveryLog.setChannelId(channel.getId());
-                deliveryLog.setKeyword(match.item().keyword());
-                deliveryLog.setLabel(match.item().label());
-                deliveryLog.setHotValue(match.item().hotValue());
-                deliveryLog.setDeliveredAt(LocalDateTime.now());
+                // One message per subscription-channel, with all matched items
+                List<HotSearchItem> allItems = toDeliver.stream().map(MatchResult::item).toList();
+                HotSearchItem primaryItem = toDeliver.get(0).item();
+                String batchId = UUID.randomUUID().toString();
 
                 MessageProvider provider = providerMap.get(channel.getProvider());
                 if (provider == null) {
-                    deliveryLog.setStatus("FAILED");
-                    deliveryLog.setError("未知的推送提供者: " + channel.getProvider());
-                    deliveryService.save(deliveryLog);
+                    for (MatchResult m : toDeliver) {
+                        deliveryService.save(buildLog(m, channel, "FAILED", "未知的推送提供者: " + channel.getProvider(), batchId));
+                    }
                     continue;
                 }
 
                 try {
-                    provider.send(channel, match.item(), matches.stream()
-                            .filter(m -> m.subscription().getId().equals(match.subscription().getId()))
-                            .map(MatchResult::item).toList());
-                    deliveryLog.setStatus("SUCCESS");
+                    provider.send(channel, primaryItem, allItems);
+                    for (MatchResult m : toDeliver) {
+                        deliveryService.save(buildLog(m, channel, "SUCCESS", null, batchId));
+                    }
                 } catch (Exception e) {
-                    deliveryLog.setStatus("FAILED");
-                    deliveryLog.setError(e.getMessage());
-                    log.error("推送失败: keyword={}, channel={}", match.item().keyword(), channel.getId(), e);
+                    log.error("推送失败: subId={}, channel={}", sub.getId(), channel.getId(), e);
+                    for (MatchResult m : toDeliver) {
+                        deliveryService.save(buildLog(m, channel, "FAILED", e.getMessage(), batchId));
+                    }
                 }
-                deliveryService.save(deliveryLog);
             }
         }
         log.info("管线执行完成");
+    }
+
+    private DeliveryLog buildLog(MatchResult match, Channel channel, String status, String error, String batchId) {
+        DeliveryLog log = new DeliveryLog();
+        log.setSubscriptionId(match.subscription().getId());
+        log.setChannelId(channel.getId());
+        log.setBatchId(batchId);
+        log.setKeyword(match.item().keyword());
+        log.setLabel(match.item().label());
+        log.setHotValue(match.item().hotValue());
+        log.setDeliveredAt(LocalDateTime.now());
+        log.setStatus(status);
+        log.setError(error);
+        return log;
     }
 }

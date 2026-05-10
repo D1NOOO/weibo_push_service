@@ -8,7 +8,9 @@ import com.hotsearch.fetcher.WeiboFetcher;
 import com.hotsearch.repository.HotSearchSnapshotRepository;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.*;
 
 @Service
@@ -41,7 +43,8 @@ public class HotSearchService {
 
     public HotSearchResult getLatestWithMeta() {
         return snapshotRepository.findTopByOrderByFetchedAtDesc()
-                .map(s -> new HotSearchResult(parseItems(s.getItems()), s.getFetchedAt()))
+                .map(s -> new HotSearchResult(parseItems(s.getItems()),
+                        s.getFetchedAt().atZone(ZoneOffset.UTC).toInstant()))
                 .orElse(new HotSearchResult(List.of(), null));
     }
 
@@ -57,7 +60,7 @@ public class HotSearchService {
         for (HotSearchSnapshot snap : snapshots) {
             List<HotSearchItem> items = parseItems(snap.getItems());
             Map<String, Object> entry = new LinkedHashMap<>();
-            entry.put("fetchedAt", snap.getFetchedAt().toString());
+            entry.put("fetchedAt", snap.getFetchedAt().atZone(ZoneOffset.UTC).toInstant().toString());
             entry.put("itemCount", items.size());
             // Top 3 keywords as summary
             entry.put("topKeywords", items.stream().limit(3)
@@ -83,7 +86,7 @@ public class HotSearchService {
                     .findFirst()
                     .ifPresent(item -> {
                         Map<String, Object> point = new LinkedHashMap<>();
-                        point.put("fetchedAt", snap.getFetchedAt().toString());
+                        point.put("fetchedAt", snap.getFetchedAt().atZone(ZoneOffset.UTC).toInstant().toString());
                         point.put("rank", item.rank());
                         point.put("hotValue", item.hotValue());
                         point.put("label", item.label());
