@@ -674,7 +674,7 @@ function loadSubscriptions() {
                         }</div>
                     ` : ''}
                     <div class="item-meta">
-                        标签过滤: ${sub.labels?.join(', ') || '无'} • 最低热度: ${sub.minHotValue || '不限'} • 创建: ${UTILS.formatTime(sub.createdAt)}
+                        标签过滤: ${sub.labels?.join(', ') || '无'} • 最低热度: ${sub.minHotValue || '不限'} • 推送: ${sub.channelIds?.length ? `已选${sub.channelIds.length}个通道` : '全部通道'} • 创建: ${UTILS.formatTime(sub.createdAt)}
                     </div>
                     <div class="item-actions">
                         <button class="btn btn-sm ${sub.enabled ? 'btn-danger' : 'btn-primary'}" 
@@ -695,9 +695,9 @@ function showSubscriptionModal(subscription = null) {
     const modal = document.getElementById('sub-modal');
     const title = document.getElementById('sub-modal-title');
     const form = document.getElementById('sub-form');
-    
+
     title.textContent = subscription ? '编辑订阅' : '新增订阅';
-    
+
     if (subscription) {
         document.getElementById('sub-id').value = subscription.id;
         document.getElementById('sub-name').value = subscription.name;
@@ -711,7 +711,26 @@ function showSubscriptionModal(subscription = null) {
         document.getElementById('sub-min-hot').value = 0;
         document.getElementById('sub-enabled').checked = true;
     }
-    
+
+    // Load channels for checkbox selection
+    API.get('/api/channels').then(channels => {
+        const container = document.getElementById('sub-channel-list');
+        const selectedIds = subscription?.channelIds || [];
+        if (channels.length) {
+            container.innerHTML = channels.map(ch => `
+                <label class="checkbox-label" style="font-size:13px;">
+                    <input type="checkbox" class="sub-ch-cb" value="${ch.id}"
+                        ${selectedIds.includes(ch.id) ? 'checked' : ''}>
+                    ${getProviderLabel(ch.provider)} ${ch.provider === 'wechat' ? '→ ' + UTILS.escape(ch.config?.chat || '未配置') : ''}
+                </label>
+            `).join('');
+        } else {
+            container.innerHTML = '<span style="font-size:12px;color:var(--text-light);">暂无可用通道</span>';
+        }
+    }).catch(() => {
+        document.getElementById('sub-channel-list').innerHTML = '<span style="font-size:12px;color:var(--text-light);">加载通道失败</span>';
+    });
+
     showModal('sub-modal');
 }
 
@@ -726,6 +745,7 @@ document.getElementById('sub-form').addEventListener('submit', async (e) => {
         excludeKeywords: UTILS.splitList(document.getElementById('sub-exclude').value),
         labels: UTILS.splitList(document.getElementById('sub-labels').value),
         minHotValue: parseInt(document.getElementById('sub-min-hot').value) || null,
+        channelIds: Array.from(document.querySelectorAll('.sub-ch-cb:checked')).map(cb => parseInt(cb.value)),
         enabled: document.getElementById('sub-enabled').checked
     };
     
@@ -812,7 +832,10 @@ function loadChannels() {
                             </div>
                         </div>
                     </div>
-                    <div class="item-meta">Webhook: ${maskWebhookUrl(ch.config?.webhookUrl || ch.config?.webhook_url || '')}</div>
+                    <div class="item-meta">${ch.provider === 'wechat'
+                        ? `目标聊天: ${UTILS.escape(ch.config?.chat || '未配置')} · API: ${UTILS.escape(ch.config?.apiBaseUrl || 'http://localhost:5001')}`
+                        : `Webhook: ${maskWebhookUrl(ch.config?.webhookUrl || ch.config?.webhook_url || '')}`
+                    }</div>
                     <div class="item-meta">创建时间: ${UTILS.formatTime(ch.createdAt)}</div>
                     <div class="item-actions">
                         <button class="btn btn-sm" onclick="sendTestMessage(${ch.id})" title="发送测试消息">测试</button>
@@ -834,6 +857,7 @@ function getProviderLabel(provider) {
         feishu: '飞书 Webhook',
         dingtalk: '钉钉 Webhook',
         wecom: '企业微信',
+        wechat: '微信机器人',
         telegram: 'Telegram Bot',
         generic: '通用 Webhook'
     };
@@ -853,15 +877,18 @@ function updateProviderHint() {
     const provider = document.getElementById('ch-provider').value;
     const hintEl = document.getElementById('ch-provider-hint');
     const urlLabel = document.getElementById('ch-url-label');
-    
+    const fieldWebhook = document.getElementById('ch-field-webhook');
+    const fieldWechat = document.getElementById('ch-field-wechat');
+
     const hints = {
         feishu: '💡 飞书群机器人 → 添加机器人 → 复制 Webhook 地址',
         dingtalk: '💡 钉钉群机器人 → 安全设置 → Webhook → 复制地址',
         wecom: '💡 企业微信群机器人 → 右键添加机器人 → 获取 Webhook',
+        wechat: '💡 通过 WeChatBot RESTful API 发送微信消息',
         telegram: '💡 与 @BotFather 对话创建机器人 → 获取 bot token → /setwebhook',
         generic: '💡 任意支持 POST JSON 的 HTTP 端点'
     };
-    
+
     const labels = {
         feishu: 'Webhook URL',
         dingtalk: 'Webhook URL',
@@ -869,9 +896,17 @@ function updateProviderHint() {
         telegram: 'Bot Token',
         generic: 'Webhook URL'
     };
-    
-    hintEl.textContent = hints[provider] || '请填写通道配置';
-    urlLabel.textContent = labels[provider] || '配置';
+
+    if (provider === 'wechat') {
+        fieldWebhook.style.display = 'none';
+        fieldWechat.style.display = '';
+        hintEl.textContent = hints.wechat;
+    } else {
+        fieldWebhook.style.display = '';
+        fieldWechat.style.display = 'none';
+        hintEl.textContent = hints[provider] || '请填写通道配置';
+        urlLabel.textContent = labels[provider] || '配置';
+    }
 }
 
 function showChannelModal(channel = null) {
@@ -884,10 +919,17 @@ function showChannelModal(channel = null) {
     if (channel) {
         document.getElementById('ch-id').value = channel.id;
         document.getElementById('ch-provider').value = channel.provider;
-        document.getElementById('ch-webhook').value = channel.config?.webhookUrl || channel.config?.webhook_url || '';
+        if (channel.provider === 'wechat') {
+            document.getElementById('ch-wechat-api').value = channel.config?.apiBaseUrl || 'http://localhost:5001';
+            document.getElementById('ch-wechat-token').value = channel.config?.token || '';
+            document.getElementById('ch-wechat-chat').value = channel.config?.chat || '';
+        } else {
+            document.getElementById('ch-webhook').value = channel.config?.webhookUrl || channel.config?.webhook_url || '';
+        }
         document.getElementById('ch-enabled').checked = channel.enabled !== false;
     } else {
         document.getElementById('ch-form').reset();
+        document.getElementById('ch-wechat-api').value = 'http://localhost:5001';
         document.getElementById('ch-enabled').checked = true;
     }
     
@@ -903,14 +945,21 @@ document.getElementById('ch-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     
     const provider = document.getElementById('ch-provider').value;
-    const webhook = document.getElementById('ch-webhook').value.trim();
     const enabled = document.getElementById('ch-enabled').checked;
-    
-    const channel = {
-        provider,
-        config: { webhookUrl: webhook },
-        enabled
-    };
+
+    let config;
+    if (provider === 'wechat') {
+        config = {
+            apiBaseUrl: document.getElementById('ch-wechat-api').value.trim() || 'http://localhost:5001',
+            token: document.getElementById('ch-wechat-token').value.trim(),
+            chat: document.getElementById('ch-wechat-chat').value.trim()
+        };
+    } else {
+        const webhook = document.getElementById('ch-webhook').value.trim();
+        config = { webhookUrl: webhook };
+    }
+
+    const channel = { provider, config, enabled };
     
     const id = document.getElementById('ch-id').value;
     
@@ -999,7 +1048,7 @@ function loadLogs() {
                         <div style="flex:1;min-width:0;">
                             <div class="log-kw-list">${kwList}</div>
                             <div style="font-size:11px;color:var(--text-light);margin-top:4px;">
-                                ${UTILS.formatTime(batch.deliveredAt)} · ${batch.keywords.length}条匹配
+                                ${batch.target ? `📩${UTILS.escape(batch.target)} · ` : ''}${UTILS.formatTime(batch.deliveredAt)} · ${batch.keywords.length}条匹配
                             </div>
                         </div>
                     </div>
@@ -1014,6 +1063,7 @@ function loadLogs() {
 function getLogTooltip(batch) {
     let tooltip = `状态: ${batch.status}\n`;
     tooltip += `时间: ${batch.deliveredAt}\n`;
+    if (batch.target) tooltip += `目标: ${batch.target}\n`;
     tooltip += `匹配: ${batch.keywords.length}条\n`;
     if (batch.keywords.length) {
         tooltip += `关键词: ${batch.keywords.map(k => k.keyword).join(', ')}\n`;
@@ -1021,6 +1071,17 @@ function getLogTooltip(batch) {
     if (batch.error) tooltip += `错误: ${batch.error}\n`;
     return tooltip.trim();
 }
+
+document.getElementById('btn-clear-logs').addEventListener('click', async () => {
+    if (!confirm('确定清空所有推送日志吗？这将重置去重状态，已推送过的关键词可能再次推送。')) return;
+    try {
+        await API.delete('/api/delivery-logs');
+        UTILS.showToast('推送日志已清空，去重状态已重置', 'success');
+        loadLogs();
+    } catch (err) {
+        UTILS.showToast('清空失败: ' + err.message, 'error');
+    }
+});
 
 document.getElementById('log-hours').addEventListener('change', () => {
     loadLogs();

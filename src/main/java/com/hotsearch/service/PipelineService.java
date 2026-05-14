@@ -98,40 +98,49 @@ public class PipelineService {
             List<MatchResult> subMatches = entry.getValue();
             Subscription sub = subMatches.get(0).subscription();
 
+            // Determine which channels to deliver to for this subscription
+            List<Long> subChannelIds = sub.getChannelIds();
             for (Channel channel : channels) {
                 if (!channel.getUserId().equals(sub.getUserId())) continue;
-
-                // Dedupe: filter out already-delivered keywords
-                List<MatchResult> toDeliver = new ArrayList<>();
-                for (MatchResult m : subMatches) {
-                    if (!deliveryService.isDuplicate(m.item().keyword(), channel.getId(), dedupeSince)) {
-                        toDeliver.add(m);
-                    }
-                }
-                if (toDeliver.isEmpty()) continue;
-
-                // One message per subscription-channel, with all matched items
-                List<HotSearchItem> allItems = toDeliver.stream().map(MatchResult::item).toList();
-                HotSearchItem primaryItem = toDeliver.get(0).item();
-                String batchId = UUID.randomUUID().toString();
+                // If subscription has specific channels, only send to those
+                if (!subChannelIds.isEmpty() && !subChannelIds.contains(channel.getId())) continue;
 
                 MessageProvider provider = providerMap.get(channel.getProvider());
                 if (provider == null) {
-                    for (MatchResult m : toDeliver) {
-                        deliveryService.save(buildLog(m, channel, "FAILED", "未知的推送提供者: " + channel.getProvider(), batchId));
+                    String batchId = UUID.randomUUID().toString();
+                    for (MatchResult m : subMatches) {
+                        deliveryService.save(buildLog(m, channel, null, "FAILED", "未知的推送提供者: " + channel.getProvider(), batchId));
                     }
                     continue;
                 }
 
-                try {
-                    provider.send(channel, primaryItem, allItems);
-                    for (MatchResult m : toDeliver) {
-                        deliveryService.save(buildLog(m, channel, "SUCCESS", null, batchId));
+                // Get delivery targets (e.g. wechat chats). Default is single empty target.
+                List<String> targets = provider.getTargets(channel);
+
+                for (String target : targets) {
+                    // Dedupe per target
+                    List<MatchResult> toDeliver = new ArrayList<>();
+                    for (MatchResult m : subMatches) {
+                        if (!deliveryService.isDuplicate(m.item().keyword(), channel.getId(), target, dedupeSince)) {
+                            toDeliver.add(m);
+                        }
                     }
-                } catch (Exception e) {
-                    log.error("推送失败: subId={}, channel={}", sub.getId(), channel.getId(), e);
-                    for (MatchResult m : toDeliver) {
-                        deliveryService.save(buildLog(m, channel, "FAILED", e.getMessage(), batchId));
+                    if (toDeliver.isEmpty()) continue;
+
+                    List<HotSearchItem> allItems = toDeliver.stream().map(MatchResult::item).toList();
+                    HotSearchItem primaryItem = toDeliver.get(0).item();
+                    String batchId = UUID.randomUUID().toString();
+
+                    try {
+                        provider.send(channel, primaryItem, allItems, target);
+                        for (MatchResult m : toDeliver) {
+                            deliveryService.save(buildLog(m, channel, target, "SUCCESS", null, batchId));
+                        }
+                    } catch (Exception e) {
+                        log.error("推送失败: subId={}, channel={}, target={}", sub.getId(), channel.getId(), target, e);
+                        for (MatchResult m : toDeliver) {
+                            deliveryService.save(buildLog(m, channel, target, "FAILED", e.getMessage(), batchId));
+                        }
                     }
                 }
             }
@@ -139,7 +148,7 @@ public class PipelineService {
         log.info("管线执行完成");
     }
 
-    private DeliveryLog buildLog(MatchResult match, Channel channel, String status, String error, String batchId) {
+    private DeliveryLog buildLog(MatchResult match, Channel channel, String target, String status, String error, String batchId) {
         DeliveryLog log = new DeliveryLog();
         log.setSubscriptionId(match.subscription().getId());
         log.setChannelId(channel.getId());
@@ -148,6 +157,7 @@ public class PipelineService {
         log.setLabel(match.item().label());
         log.setHotValue(match.item().hotValue());
         log.setDeliveredAt(LocalDateTime.now());
+        log.setTarget(target != null && !target.isBlank() ? target : null);
         log.setStatus(status);
         log.setError(error);
         return log;

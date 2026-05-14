@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/delivery-logs")
@@ -36,5 +37,12 @@ public class DeliveryLogController {
         int safeHours = Math.max(1, Math.min(hours, 168));
         Long userId = getUserId(authHeader);
         return ResponseEntity.ok(deliveryService.getRecentBatchesByUser(userId, safeHours));
+    }
+
+    @DeleteMapping
+    @Operation(summary = "清空所有推送日志（重置去重状态）")
+    public ResponseEntity<Map<String, String>> clearAll() {
+        deliveryService.clearAll();
+        return ResponseEntity.ok(Map.of("message", "推送日志已清空，去重状态已重置"));
     }
 }

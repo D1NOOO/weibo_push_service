@@ -32,6 +32,7 @@ public class SubscriptionService {
         sub.setExcludeKeywords(req.excludeKeywords() != null ? req.excludeKeywords() : List.of());
         sub.setLabels(req.labels() != null ? req.labels() : List.of());
         sub.setMinHotValue(req.minHotValue());
+        sub.setChannelIds(req.channelIds() != null ? req.channelIds() : List.of());
         sub.setEnabled(req.enabled() != null ? req.enabled() : true);
         return toResponse(subscriptionRepository.save(sub));
     }
@@ -46,6 +47,7 @@ public class SubscriptionService {
         sub.setExcludeKeywords(req.excludeKeywords() != null ? req.excludeKeywords() : List.of());
         sub.setLabels(req.labels() != null ? req.labels() : List.of());
         sub.setMinHotValue(req.minHotValue());
+        if (req.channelIds() != null) sub.setChannelIds(req.channelIds());
         sub.setEnabled(req.enabled());
         return toResponse(subscriptionRepository.save(sub));
     }
@@ -67,7 +69,7 @@ public class SubscriptionService {
 
     private SubscriptionResponse toResponse(Subscription s) {
         return new SubscriptionResponse(s.getId(), s.getName(), s.getKeywords(),
-                s.getExcludeKeywords(), s.getLabels(), s.getMinHotValue(), s.getEnabled(), s.getCreatedAt());
+                s.getExcludeKeywords(), s.getLabels(), s.getMinHotValue(), s.getChannelIds(), s.getEnabled(), s.getCreatedAt());
     }
 
     public List<Subscription> listAllEnabled() {

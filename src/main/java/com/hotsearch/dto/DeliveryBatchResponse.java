@@ -10,7 +10,8 @@ public record DeliveryBatchResponse(
     String status,
     String error,
     List<KeywordEntry> keywords,
-    LocalDateTime deliveredAt
+    LocalDateTime deliveredAt,
+    String target
 ) {
     public record KeywordEntry(String keyword, String label, Long hotValue) {}
 }

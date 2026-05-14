@@ -114,6 +114,9 @@
                         <input type="text" id="sub-labels" placeholder="例如：热,新,爆">
                         <label>最低热度值</label>
                         <input type="number" id="sub-min-hot" value="0" min="0">
+                        <label>推送通道</label>
+                        <div class="hint-text">💡 不选则推送到所有通道</div>
+                        <div id="sub-channel-list" style="margin-bottom:8px;max-height:120px;overflow-y:auto;"></div>
                         <label class="checkbox-label"><input type="checkbox" id="sub-enabled" checked> 启用</label>
                         <div class="modal-actions">
                             <button type="submit" class="btn btn-primary">保存</button>
@@ -141,11 +144,25 @@
                             <option value="feishu">飞书 Webhook</option>
                             <option value="dingtalk">钉钉 Webhook</option>
                             <option value="wecom">企业微信 Webhook</option>
+                            <option value="wechat">微信机器人</option>
                             <option value="telegram">Telegram Bot</option>
                             <option value="generic">通用 Webhook</option>
                         </select>
-                        <label id="ch-url-label">Webhook URL</label>
-                        <input type="url" id="ch-webhook" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/...">
+                        <!-- 通用字段：非微信通道使用 -->
+                        <div id="ch-field-webhook">
+                            <label id="ch-url-label">Webhook URL</label>
+                            <input type="url" id="ch-webhook" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/...">
+                        </div>
+                        <!-- 微信专属字段 -->
+                        <div id="ch-field-wechat" style="display:none;">
+                            <label>API Base URL</label>
+                            <input type="text" id="ch-wechat-api" placeholder="http://localhost:5001" value="http://localhost:5001">
+                            <label>API Token</label>
+                            <input type="text" id="ch-wechat-token" placeholder="wechatbot-api-test-2026">
+                            <label>目标聊天名称</label>
+                            <input type="text" id="ch-wechat-chat" placeholder="Feng 或 胖达测试群2026">
+                            <div class="hint-text">💡 多个聊天用逗号分隔，如：Feng,胖达测试群2026</div>
+                        </div>
                         <div id="ch-provider-hint" class="hint-text">💡 飞书群机器人 → 添加机器人 → 复制 Webhook 地址</div>
                         <label class="checkbox-label"><input type="checkbox" id="ch-enabled" checked> 启用</label>
                         <div class="modal-actions">
@@ -162,6 +179,7 @@
             <div class="section-header">
                 <h2>推送日志</h2>
                 <div class="header-actions">
+                    <button id="btn-clear-logs" class="btn btn-sm btn-danger" title="清空日志并重置去重状态">清空日志</button>
                     <select id="log-hours">
                         <option value="24">最近24小时</option>
                         <option value="48">最近48小时</option>
@@ -200,7 +218,7 @@
                     <h3>应用信息</h3>
                     <div style="font-size: 13px; line-height: 1.8;">
                         <p><strong>数据抓取</strong>：1 小时/次（定时任务）</p>
-                        <p><strong>消息通道</strong>：飞书 · 钉钉 · 企微 · Telegram · Webhook</p>
+                        <p><strong>消息通道</strong>：飞书 · 钉钉 · 企微 · 微信 · Telegram · Webhook</p>
                         <p><strong>匹配模式</strong>：包含 · 前缀 · 正则</p>
                         <p><strong>数据时效</strong>：抓取快照，非实时</p>
                     </div>

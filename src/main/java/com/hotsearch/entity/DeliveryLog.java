@@ -35,6 +35,9 @@ public class DeliveryLog {
     @Column(name = "delivered_at", nullable = false)
     private LocalDateTime deliveredAt;
 
+    @Column(name = "target")
+    private String target;
+
     public DeliveryLog() {}
 
     public Long getId() { return id; }
@@ -57,4 +60,6 @@ public class DeliveryLog {
     public void setBatchId(String batchId) { this.batchId = batchId; }
     public LocalDateTime getDeliveredAt() { return deliveredAt; }
     public void setDeliveredAt(LocalDateTime deliveredAt) { this.deliveredAt = deliveredAt; }
+    public String getTarget() { return target; }
+    public void setTarget(String target) { this.target = target; }
 }

@@ -10,5 +10,6 @@ public record SubscriptionRequest(
     List<String> excludeKeywords,
     List<String> labels,
     Integer minHotValue,
+    List<Long> channelIds,
     @NotNull Boolean enabled
 ) {}

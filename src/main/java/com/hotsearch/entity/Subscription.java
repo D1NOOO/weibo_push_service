@@ -32,6 +32,9 @@ public class Subscription {
     @Column(name = "labels", columnDefinition = "TEXT")
     private String labelsJson;
 
+    @Column(name = "channel_ids", columnDefinition = "TEXT")
+    private String channelIdsJson;
+
     @Column(name = "min_hot_value")
     private Integer minHotValue;
 
@@ -83,6 +86,22 @@ public class Subscription {
     }
     public void setLabels(List<String> labels) {
         this.labelsJson = toJson(labels);
+    }
+
+    public List<Long> getChannelIds() {
+        List<String> raw = parseJsonList(channelIdsJson);
+        List<Long> ids = new ArrayList<>();
+        for (String s : raw) {
+            try { ids.add(Long.parseLong(s)); } catch (NumberFormatException ignored) {}
+        }
+        return ids;
+    }
+    public void setChannelIds(List<Long> ids) {
+        if (ids == null) {
+            this.channelIdsJson = "[]";
+            return;
+        }
+        this.channelIdsJson = toJson(ids.stream().map(String::valueOf).toList());
     }
 
     private List<String> parseJsonList(String json) {

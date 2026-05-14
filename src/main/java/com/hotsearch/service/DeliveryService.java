@@ -25,8 +25,16 @@ public class DeliveryService {
         return deliveryLogRepository.save(log);
     }
 
+    public void clearAll() {
+        deliveryLogRepository.deleteAll();
+    }
+
     public boolean isDuplicate(String keyword, Long channelId, LocalDateTime since) {
         return deliveryLogRepository.existsByKeywordAndChannelIdAndDeliveredAtAfter(keyword, channelId, since);
+    }
+
+    public boolean isDuplicate(String keyword, Long channelId, String target, LocalDateTime since) {
+        return deliveryLogRepository.existsByKeywordAndChannelIdAndTargetAndDeliveredAtAfter(keyword, channelId, target, since);
     }
 
     public List<DeliveryBatchResponse> getRecentBatches(int hours) {
@@ -70,7 +78,8 @@ public class DeliveryService {
                             first.getStatus(),
                             first.getError(),
                             keywords,
-                            first.getDeliveredAt()
+                            first.getDeliveredAt(),
+                            first.getTarget()
                     );
                 })
                 .toList();
