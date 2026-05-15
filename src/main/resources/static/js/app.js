@@ -176,8 +176,10 @@ const ChartManager = {
             console.warn('Chart.js not loaded, skipping charts');
             return;
         }
-        
-        // Initialize charts
+
+        // Force canvas to respect device pixel ratio for sharp rendering
+        Chart.defaults.devicePixelRatio = window.devicePixelRatio || 1;
+
         this.labelChart = new Chart(
             document.getElementById('chart-labels').getContext('2d'),
             this.createLabelChartConfig()
@@ -187,7 +189,7 @@ const ChartManager = {
             this.createHeatChartConfig()
         );
     },
-    
+
     createLabelChartConfig() {
         return {
             type: 'doughnut',
@@ -218,7 +220,7 @@ const ChartManager = {
             }
         };
     },
-    
+
     createHeatChartConfig() {
         return {
             type: 'bar',
@@ -267,15 +269,15 @@ const ChartManager = {
             }
         };
     },
-    
+
     updateLabelData(data) {
         if (!this.labelChart) return;
-        
+
         this.labelChart.data.labels = data.labels;
         this.labelChart.data.datasets[0].data = data.values;
         this.labelChart.update();
     },
-    
+
     updateHeatData(data) {
         if (!this.heatChart) return;
 
@@ -487,13 +489,13 @@ function updateCharts(items) {
     const validLabels = labels.filter((_, i) => counts[i] > 0);
     const validCounts = counts.filter(c => c > 0);
     
-    if (ChartManager.updateLabelData && ChartManager.initCharts) {
+    if (ChartManager.labelChart) {
         ChartManager.updateLabelData({ labels: validLabels, values: validCounts });
     }
-    
+
     // Heat top 10
     const sortedByHeat = items.filter(x => x.hotValue).sort((a,b) => b.hotValue - a.hotValue).slice(0, 10);
-    if (sortedByHeat.length && ChartManager.updateHeatData) {
+    if (sortedByHeat.length && ChartManager.heatChart) {
         const heatLabels = sortedByHeat.map(x => x.keyword);
         const heatValues = sortedByHeat.map(x => x.hotValue);
         ChartManager.updateHeatData({ labels: heatLabels, values: heatValues });
@@ -1173,17 +1175,19 @@ function showDashboard(username, mustChangePassword) {
     }
 }
 
-// Auto login if token exists
+// Auto login if token exists and not expired
 if (API.token) {
-    (async () => {
-        try {
-            await API.get('/api/health');
-            const payload = JSON.parse(atob(API.token.split('.')[1]));
+    try {
+        const payload = JSON.parse(atob(API.token.split('.')[1]));
+        const nowSec = Math.floor(Date.now() / 1000);
+        if (payload.exp && payload.exp < nowSec) {
+            API.logout(); // token expired, clear and show login
+        } else {
             showDashboard(payload.sub || 'admin');
-        } catch (e) {
-            API.logout();
         }
-    })();
+    } catch (e) {
+        API.logout();
+    }
 }
 
 // Add freshness banner
