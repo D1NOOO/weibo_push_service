@@ -239,13 +239,30 @@ const ChartManager = {
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
-                            label: (ctx) => `${ctx.label}: ${UTILS.formatNum(ctx.raw)}`
+                            title: (ctx) => ctx[0].label,
+                            label: (ctx) => `热度: ${UTILS.formatNum(ctx.raw)}`
                         }
                     }
                 },
                 scales: {
-                    x: { grid: { display: false }, ticks: { color: getComputedStyle(document.documentElement).getPropertyValue('--text-light') } },
-                    y: { beginAtZero: true, grid: { color: getComputedStyle(document.documentElement).getPropertyValue('--border') }, ticks: { color: getComputedStyle(document.documentElement).getPropertyValue('--text-light') } }
+                    x: {
+                        grid: { display: false },
+                        ticks: {
+                            autoSkip: false,
+                            maxRotation: 45,
+                            minRotation: 0,
+                            font: { size: 11 },
+                            color: getComputedStyle(document.documentElement).getPropertyValue('--text-light')
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: getComputedStyle(document.documentElement).getPropertyValue('--border') },
+                        ticks: {
+                            color: getComputedStyle(document.documentElement).getPropertyValue('--text-light'),
+                            callback: (v) => UTILS.formatNum(v)
+                        }
+                    }
                 }
             }
         };
@@ -381,8 +398,10 @@ async function loadHotSearch() {
     
     try {
         const result = await API.get('/api/hotsearch');
-        const items = Array.isArray(result) ? result : (result.items || []);
+        let items = Array.isArray(result) ? result : (result.items || []);
         const fetchedAt = result.fetchedAt || null;
+        // Filter out items without keywords (e.g. topic headers from Weibo API)
+        items = items.filter(item => item.keyword);
         State.allItems = items;
         
         if (!items.length) {
@@ -475,7 +494,7 @@ function updateCharts(items) {
     // Heat top 10
     const sortedByHeat = items.filter(x => x.hotValue).sort((a,b) => b.hotValue - a.hotValue).slice(0, 10);
     if (sortedByHeat.length && ChartManager.updateHeatData) {
-        const heatLabels = sortedByHeat.map(x => x.keyword.length > 6 ? x.keyword.substring(0,6)+'...' : x.keyword);
+        const heatLabels = sortedByHeat.map(x => x.keyword);
         const heatValues = sortedByHeat.map(x => x.hotValue);
         ChartManager.updateHeatData({ labels: heatLabels, values: heatValues });
     }
@@ -1012,13 +1031,13 @@ function sendTestMessage(channelId) {
         .catch(err => UTILS.showToast('测试失败: ' + err.message, 'error'));
 }
 
-// ==================== Delivery Log Functions ==================== 
+// ==================== Delivery Log Functions ====================
 function loadLogs() {
     const container = document.getElementById('log-list');
     const hours = document.getElementById('log-hours').value;
-    
+
     UTILS.showLoading(container);
-    
+
     API.get(`/api/delivery-logs?hours=${hours}`).then(logs => {
         if (!logs.length) {
             container.innerHTML = `
@@ -1031,45 +1050,52 @@ function loadLogs() {
             `;
             return;
         }
-        
-        setTimeout(() => {
-            container.innerHTML = logs.map(batch => {
-                const kwList = batch.keywords.map(k => {
-                    let s = `<span class="log-kw">${UTILS.escape(k.keyword)}`;
-                    if (k.label) s += ` <em>[${UTILS.escape(k.label)}]</em>`;
-                    if (k.hotValue) s += ` <small>${UTILS.formatNum(k.hotValue)}</small>`;
-                    s += '</span>';
-                    return s;
-                }).join('');
 
-                return `
-                    <div class="log-card" title="${getLogTooltip(batch)}">
-                        <span class="log-status ${batch.status === 'SUCCESS' ? 'success' : 'failed'}">${batch.status}</span>
-                        <div style="flex:1;min-width:0;">
-                            <div class="log-kw-list">${kwList}</div>
-                            <div style="font-size:11px;color:var(--text-light);margin-top:4px;">
-                                ${batch.target ? `📩${UTILS.escape(batch.target)} · ` : ''}${UTILS.formatTime(batch.deliveredAt)} · ${batch.keywords.length}条匹配
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
+        setTimeout(() => {
+            container.innerHTML = logs.map(entry => renderLogEntry(entry)).join('');
         }, 200);
     }).catch(err => {
         container.innerHTML = `<div class="empty"><div class="empty-icon">️⚠️</div><p>加载失败: ${UTILS.escape(err.message)}</p></div>`;
     });
 }
 
-function getLogTooltip(batch) {
-    let tooltip = `状态: ${batch.status}\n`;
-    tooltip += `时间: ${batch.deliveredAt}\n`;
-    if (batch.target) tooltip += `目标: ${batch.target}\n`;
-    tooltip += `匹配: ${batch.keywords.length}条\n`;
-    if (batch.keywords.length) {
-        tooltip += `关键词: ${batch.keywords.map(k => k.keyword).join(', ')}\n`;
+function renderLogEntry(entry) {
+    let labelHtml = '';
+    if (entry.label) labelHtml = ` <span class="hot-label ${UTILS.getLabelClass(entry.label)}" style="font-size:10px;vertical-align:middle;">${UTILS.escape(entry.label)}</span>`;
+
+    let hotHtml = '';
+    if (entry.hotValue) hotHtml = ` <span class="log-hot-value">${UTILS.formatNum(entry.hotValue)}</span>`;
+
+    let channelsHtml = '';
+    if (entry.channels && entry.channels.length) {
+        channelsHtml = entry.channels.map(ch => {
+            const icon = ch.status === 'SUCCESS' ? '✓' : '✗';
+            const cls = ch.status === 'SUCCESS' ? 'ch-ok' : 'ch-fail';
+            let line = `<span class="${cls}">${icon} ${shortProviderName(ch.provider)}`;
+            if (ch.target) line += ` · ${UTILS.escape(ch.target)}`;
+            if (ch.error) line += ` <span class="ch-err-msg">(${UTILS.escape(ch.error)})</span>`;
+            line += '</span>';
+            return line;
+        }).join('');
     }
-    if (batch.error) tooltip += `错误: ${batch.error}\n`;
-    return tooltip.trim();
+
+    return `
+        <div class="log-card log-card-v2">
+            <div class="log-kw-main">
+                <span class="log-kw">${UTILS.escape(entry.keyword)}</span>${labelHtml}${hotHtml}
+            </div>
+            ${channelsHtml ? `<div class="log-ch-list">${channelsHtml}</div>` : ''}
+            <div class="log-time">${UTILS.formatTime(entry.deliveredAt)}</div>
+        </div>
+    `;
+}
+
+function shortProviderName(provider) {
+    const names = {
+        feishu: '飞书', dingtalk: '钉钉', wecom: '企微',
+        wechat: '微信', telegram: 'Telegram', generic: 'Webhook'
+    };
+    return names[provider] || provider;
 }
 
 document.getElementById('btn-clear-logs').addEventListener('click', async () => {

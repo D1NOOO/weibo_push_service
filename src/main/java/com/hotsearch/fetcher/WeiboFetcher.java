@@ -100,10 +100,12 @@ public class WeiboFetcher {
         for (int i = 0; i < realtime.size(); i++) {
             JsonNode x = realtime.get(i);
             String word = x.has("word") ? x.get("word").asText() : "";
-            String url = buildSearchUrl(word);
+            String keyword = x.has("note") ? x.get("note").asText() : word;
+            if (keyword == null || keyword.isBlank()) continue;
+            String url = buildSearchUrl(keyword);
             items.add(new HotSearchItem(
-                    x.has("realpos") ? x.get("realpos").asInt() : i + 1,
-                    x.has("note") ? x.get("note").asText() : word,
+                    items.size() + 1,  // re-rank after filtering blanks
+                    keyword,
                     x.has("label_name") ? x.get("label_name").asText()
                             : x.has("icon_desc") ? x.get("icon_desc").asText()
                             : x.has("small_icon_desc") ? x.get("small_icon_desc").asText() : null,
@@ -136,9 +138,11 @@ public class WeiboFetcher {
                             for (int i = 0; i < realtime.size(); i++) {
                                 JsonNode x = realtime.get(i);
                                 String word = x.path("word").asText("");
+                                String keyword = x.path("note").asText(word);
+                                if (keyword.isBlank()) continue;
                                 items.add(new HotSearchItem(
-                                        i + 1,
-                                        x.path("note").asText(word),
+                                        items.size() + 1,
+                                        keyword,
                                         x.path("label_name").asText(null),
                                         x.path("num").asLong(0),
                                         x.path("is_ad").asBoolean(false),

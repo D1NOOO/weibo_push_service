@@ -21,7 +21,7 @@ jwt:
 
 app:
   schedule:
-    cron: "0 0 * * * *"
+    cron: "0 */10 * * * *"
   dedupe:
     window-hours: 6
   fetcher:

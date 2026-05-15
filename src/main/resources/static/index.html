@@ -42,36 +42,37 @@
 
         <!-- 热搜榜 -->
         <section id="tab-hotsearch" class="tab-content active">
-            <!-- Stats row -->
-            <div class="stats-row" id="stats-row">
-                <div class="stat-card" title="当前热搜总数">
-                    <div class="stat-value" id="stat-total">—</div>
-                    <div class="stat-label">热搜总数</div>
+            <!-- Stats + Label chart row -->
+            <div class="stats-chart-row">
+                <div class="stats-grid-2x2" id="stats-row">
+                    <div class="stat-card" title="当前热搜总数">
+                        <div class="stat-value" id="stat-total">—</div>
+                        <div class="stat-label">热搜总数</div>
+                    </div>
+                    <div class="stat-card" title="标签为「爆」的话题数">
+                        <div class="stat-value" id="stat-burst">—</div>
+                        <div class="stat-label">🔥 爆款话题</div>
+                    </div>
+                    <div class="stat-card" title="标签为「新」的新上榜话题">
+                        <div class="stat-value" id="stat-new">—</div>
+                        <div class="stat-label">✨ 新上榜</div>
+                    </div>
+                    <div class="stat-card" title="广告推广话题数">
+                        <div class="stat-value" id="stat-ads">—</div>
+                        <div class="stat-label">📌 广告</div>
+                    </div>
                 </div>
-                <div class="stat-card" title="标签为「爆」的话题数">
-                    <div class="stat-value" id="stat-burst">—</div>
-                    <div class="stat-label">🔥 爆款话题</div>
-                </div>
-                <div class="stat-card" title="标签为「新」的新上榜话题">
-                    <div class="stat-value" id="stat-new">—</div>
-                    <div class="stat-label">✨ 新上榜</div>
-                </div>
-                <div class="stat-card" title="广告推广话题数">
-                    <div class="stat-value" id="stat-ads">—</div>
-                    <div class="stat-label">📌 广告</div>
-                </div>
-            </div>
 
-            <!-- Label distribution chart -->
-            <div class="chart-container" id="chart-label-container">
-                <div class="chart-title">📊 标签分布</div>
-                <canvas id="chart-labels" height="80"></canvas>
+                <div class="chart-container chart-container-label" id="chart-label-container">
+                    <div class="chart-title">📊 标签分布</div>
+                    <canvas id="chart-labels" height="80"></canvas>
+                </div>
             </div>
 
             <!-- Heat top 10 chart -->
             <div class="chart-container" id="chart-heat-container">
                 <div class="chart-title">🌡️ 热度 TOP 10</div>
-                <canvas id="chart-heat" height="120"></canvas>
+                <canvas id="chart-heat" height="160"></canvas>
             </div>
 
             <div class="section-header">
@@ -217,7 +218,7 @@
                 <div class="config-card">
                     <h3>应用信息</h3>
                     <div style="font-size: 13px; line-height: 1.8;">
-                        <p><strong>数据抓取</strong>：1 小时/次（定时任务）</p>
+                        <p><strong>数据抓取</strong>：10 分钟/次（定时任务）</p>
                         <p><strong>消息通道</strong>：飞书 · 钉钉 · 企微 · 微信 · Telegram · Webhook</p>
                         <p><strong>匹配模式</strong>：包含 · 前缀 · 正则</p>
                         <p><strong>数据时效</strong>：抓取快照，非实时</p>

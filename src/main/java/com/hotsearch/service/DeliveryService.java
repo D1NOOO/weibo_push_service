@@ -1,6 +1,7 @@
 package com.hotsearch.service;
 
-import com.hotsearch.dto.DeliveryBatchResponse;
+import com.hotsearch.dto.DeliveryLogEntry;
+import com.hotsearch.entity.Channel;
 import com.hotsearch.entity.DeliveryLog;
 import com.hotsearch.repository.ChannelRepository;
 import com.hotsearch.repository.DeliveryLogRepository;
@@ -37,49 +38,66 @@ public class DeliveryService {
         return deliveryLogRepository.existsByKeywordAndChannelIdAndTargetAndDeliveredAtAfter(keyword, channelId, target, since);
     }
 
-    public List<DeliveryBatchResponse> getRecentBatches(int hours) {
-        LocalDateTime since = LocalDateTime.now().minusHours(hours);
-        List<DeliveryLog> logs = deliveryLogRepository.findByDeliveredAtAfterOrderByDeliveredAtDesc(since);
-        return groupIntoBatches(logs);
-    }
-
-    public List<DeliveryBatchResponse> getRecentBatchesByUser(Long userId, int hours) {
+    public List<DeliveryLogEntry> getRecentByUser(Long userId, int hours) {
         LocalDateTime since = LocalDateTime.now().minusHours(hours);
 
-        List<Long> userChannelIds = channelRepository.findByUserId(userId)
-                .stream()
-                .map(ch -> ch.getId())
-                .collect(Collectors.toList());
+        List<Channel> userChannels = channelRepository.findByUserId(userId);
+        if (userChannels.isEmpty()) return List.of();
 
-        if (userChannelIds.isEmpty()) return List.of();
+        Map<Long, Channel> channelMap = userChannels.stream()
+                .collect(Collectors.toMap(Channel::getId, ch -> ch));
 
-        List<DeliveryLog> logs = deliveryLogRepository.findByChannelIdInAndDeliveredAtAfterOrderByDeliveredAtDesc(userChannelIds, since);
-        return groupIntoBatches(logs);
+        List<Long> userChannelIds = new ArrayList<>(channelMap.keySet());
+
+        List<DeliveryLog> logs = deliveryLogRepository
+                .findByChannelIdInAndDeliveredAtAfterOrderByDeliveredAtDesc(userChannelIds, since);
+
+        return groupByKeyword(logs, channelMap);
     }
 
-    private List<DeliveryBatchResponse> groupIntoBatches(List<DeliveryLog> logs) {
-        Map<String, List<DeliveryLog>> grouped = logs.stream()
+    private List<DeliveryLogEntry> groupByKeyword(List<DeliveryLog> logs,
+                                                   Map<Long, Channel> channelMap) {
+        // Group by keyword, then aggregate channel deliveries
+        Map<String, List<DeliveryLog>> groupedByKw = logs.stream()
                 .collect(Collectors.groupingBy(
-                        l -> l.getBatchId() != null ? l.getBatchId() : "legacy_" + l.getId(),
+                        DeliveryLog::getKeyword,
                         LinkedHashMap::new,
                         Collectors.toList()
                 ));
 
-        return grouped.values().stream()
-                .map(batch -> {
-                    DeliveryLog first = batch.get(0);
-                    List<DeliveryBatchResponse.KeywordEntry> keywords = batch.stream()
-                            .map(l -> new DeliveryBatchResponse.KeywordEntry(l.getKeyword(), l.getLabel(), l.getHotValue()))
-                            .toList();
-                    return new DeliveryBatchResponse(
-                            first.getBatchId(),
-                            first.getSubscriptionId(),
-                            first.getChannelId(),
-                            first.getStatus(),
-                            first.getError(),
-                            keywords,
-                            first.getDeliveredAt(),
-                            first.getTarget()
+        return groupedByKw.entrySet().stream()
+                .map(entry -> {
+                    String keyword = entry.getKey();
+                    List<DeliveryLog> kwLogs = entry.getValue();
+
+                    // Dedupe channel+target combos, keep latest status
+                    Map<String, DeliveryLogEntry.ChannelDelivery> channelDeliveries = new LinkedHashMap<>();
+                    DeliveryLog latest = kwLogs.get(0);
+
+                    for (DeliveryLog log : kwLogs) {
+                        if (log.getDeliveredAt().isAfter(latest.getDeliveredAt())) {
+                            latest = log;
+                        }
+                        Channel ch = channelMap.get(log.getChannelId());
+                        String provider = ch != null ? ch.getProvider() : "unknown";
+                        String target = log.getTarget();
+                        String key = provider + "|" + (target != null ? target : "");
+                        // Only keep the latest entry per channel+target
+                        channelDeliveries.putIfAbsent(key,
+                                new DeliveryLogEntry.ChannelDelivery(
+                                        provider,
+                                        target,
+                                        log.getStatus(),
+                                        log.getError()
+                                ));
+                    }
+
+                    return new DeliveryLogEntry(
+                            keyword,
+                            latest.getLabel(),
+                            latest.getHotValue(),
+                            new ArrayList<>(channelDeliveries.values()),
+                            latest.getDeliveredAt()
                     );
                 })
                 .toList();

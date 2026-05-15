@@ -254,14 +254,17 @@ header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
 .btn-trend:hover { opacity: 1 !important; background: rgba(var(--primary-rgb),0.12); }
 
 /* ==================== Dashboard Stats ==================== */
-.stats-row {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 12px; margin-bottom: 20px;
+.stats-chart-row {
+    display: flex; gap: 16px; margin-bottom: 20px; align-items: stretch;
+}
+.stats-grid-2x2 {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 12px; flex: 0 0 auto;
 }
 .stat-card {
     background: var(--card); border-radius: var(--radius); padding: 18px;
     border: 1px solid var(--border); text-align: center;
-    transition: all var(--transition);
+    transition: all var(--transition); min-width: 120px;
 }
 .stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
 .stat-value {
@@ -276,13 +279,21 @@ header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
 .chart-container {
     background: var(--card); border-radius: var(--radius); padding: 20px;
     border: 1px solid var(--border); margin-bottom: 20px;
-    transition: all var(--transition);
-    overflow: hidden;
+    transition: all var(--transition); overflow: hidden;
 }
-#chart-labels { max-height: 180px; }
-#chart-heat { max-height: 280px; }
+.chart-container-label {
+    flex: 1; min-width: 0; margin-bottom: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+#chart-labels { max-height: 180px; max-width: 100%; }
+#chart-heat { max-height: 340px; }
 .chart-container:hover { box-shadow: var(--shadow); }
 .chart-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--text-secondary); }
+
+@media (max-width: 900px) {
+    .stats-chart-row { flex-direction: column; }
+    .chart-container-label { margin-bottom: 20px; }
+}
 
 /* ==================== Item Cards (Subscriptions/Channels) ==================== */
 .item-card {
@@ -324,6 +335,20 @@ header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
 .log-kw { font-weight: 600; font-size: 13px; }
 .log-kw em { font-style: normal; color: var(--primary); font-size: 11px; margin-left: 2px; }
 .log-kw small { color: var(--text-light); font-size: 11px; margin-left: 2px; }
+
+.log-card-v2 {
+    flex-direction: column !important;
+    gap: 6px !important;
+    padding: 14px 18px !important;
+}
+.log-kw-main { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.log-kw-main .log-kw { font-weight: 700; font-size: 14px; color: var(--text-dark); }
+.log-hot-value { color: var(--primary); font-size: 12px; font-weight: 600; }
+.log-ch-list { display: flex; flex-direction: column; gap: 3px; padding-left: 2px; }
+.ch-ok { color: var(--success); font-size: 12px; }
+.ch-fail { color: var(--danger); font-size: 12px; }
+.ch-err-msg { color: var(--text-light); font-size: 11px; }
+.log-time { font-size: 11px; color: var(--text-light); }
 
 /* ==================== Modal ==================== */
 .modal {
@@ -491,7 +516,7 @@ select:focus { outline: none; border-color: var(--primary); }
     .section-header { flex-direction: column; gap: 10px; align-items: flex-start; }
     .section-header h2 { font-size: 16px; }
     .modal-content { width: 95vw; padding: 20px; border-radius: 16px; }
-    .stats-row { grid-template-columns: repeat(2, 1fr); }
+    .stats-grid-2x2 { grid-template-columns: repeat(2, 1fr); }
     .header-actions { flex-wrap: wrap; }
     .search-input { max-width: 100%; }
 }
