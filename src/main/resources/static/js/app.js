@@ -20,11 +20,12 @@ class APIService {
     }
 
     async request(method, path, body = null) {
-        const headers = { 'Content-Type': 'application/json' };
+        const headers = {};
+        if (body != null) headers['Content-Type'] = 'application/json';
         if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
-        
+
         const opts = { method, headers };
-        if (body) opts.body = JSON.stringify(body);
+        if (body != null) opts.body = JSON.stringify(body);
         
         try {
             const res = await fetch(this.baseUrl + path, opts);

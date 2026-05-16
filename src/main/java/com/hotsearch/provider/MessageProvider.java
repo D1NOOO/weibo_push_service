@@ -3,6 +3,7 @@ package com.hotsearch.provider;
 import com.hotsearch.dto.HotSearchItem;
 import com.hotsearch.entity.Channel;
 
+import java.util.Collections;
 import java.util.List;
 
 public interface MessageProvider {
@@ -10,7 +11,7 @@ public interface MessageProvider {
 
     /** Targets this provider will deliver to (e.g. chat names for wechat). Default: single null target. */
     default List<String> getTargets(Channel channel) {
-        return List.of((String) null);
+        return Collections.singletonList(null);
     }
 
     /** Send to a specific target. Default delegates to the target-agnostic send(). */

@@ -38,7 +38,7 @@ public class GlobalExceptionHandler {
 
     private ResponseEntity<Map<String, Object>> buildError(HttpStatus status, String message) {
         return ResponseEntity.status(status).body(Map.of(
-                "message", message,
+                "message", message != null ? message : "未知错误",
                 "timestamp", LocalDateTime.now().toString()
         ));
     }
