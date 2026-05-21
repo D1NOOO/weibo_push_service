@@ -8,8 +8,9 @@ import java.util.List;
 public interface DeliveryLogRepository extends JpaRepository<DeliveryLog, Long> {
     List<DeliveryLog> findByDeliveredAtAfterOrderByDeliveredAtDesc(LocalDateTime since);
     boolean existsByKeywordAndChannelIdAndDeliveredAtAfter(String keyword, Long channelId, LocalDateTime since);
-    boolean existsByKeywordAndChannelIdAndTargetAndDeliveredAtAfter(String keyword, Long channelId, String target, LocalDateTime since);
-    
+    boolean existsByKeywordAndChannelIdAndTargetAndStatusAndDeliveredAtAfter(
+            String keyword, Long channelId, String target, String status, LocalDateTime since);
+
     // Find logs by channel IDs belonging to a specific user
     List<DeliveryLog> findByChannelIdInAndDeliveredAtAfterOrderByDeliveredAtDesc(List<Long> channelIds, LocalDateTime since);
 }

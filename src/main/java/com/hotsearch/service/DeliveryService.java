@@ -35,7 +35,8 @@ public class DeliveryService {
     }
 
     public boolean isDuplicate(String keyword, Long channelId, String target, LocalDateTime since) {
-        return deliveryLogRepository.existsByKeywordAndChannelIdAndTargetAndDeliveredAtAfter(keyword, channelId, target, since);
+        return deliveryLogRepository.existsByKeywordAndChannelIdAndTargetAndStatusAndDeliveredAtAfter(
+                keyword, channelId, target, "SUCCESS", since);
     }
 
     public List<DeliveryLogEntry> getRecentByUser(Long userId, int hours) {

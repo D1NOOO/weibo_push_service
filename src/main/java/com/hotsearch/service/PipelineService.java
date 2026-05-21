@@ -138,6 +138,15 @@ public class PipelineService {
                         }
                     } catch (Exception e) {
                         log.error("推送失败: subId={}, channel={}, target={}", sub.getId(), channel.getId(), target, e);
+                        if (isRateLimited(e)) {
+                            if (retryWithBackoff(provider, channel, primaryItem, allItems, target)) {
+                                log.info("退避重试成功: keyword={}, channel={}", primaryItem.keyword(), channel.getId());
+                                for (MatchResult m : toDeliver) {
+                                    deliveryService.save(buildLog(m, channel, target, "SUCCESS", null, batchId));
+                                }
+                                continue;
+                            }
+                        }
                         for (MatchResult m : toDeliver) {
                             deliveryService.save(buildLog(m, channel, target, "FAILED", e.getMessage(), batchId));
                         }
@@ -161,5 +170,37 @@ public class PipelineService {
         log.setStatus(status);
         log.setError(error);
         return log;
+    }
+
+    private static boolean isRateLimited(Exception e) {
+        String msg = e.getMessage();
+        return msg != null && (msg.contains("11232") || msg.contains("frequency limited")
+                || msg.contains("frequencyLimited") || msg.contains("rate limit"));
+    }
+
+    private boolean retryWithBackoff(MessageProvider provider, Channel channel,
+                                      HotSearchItem primaryItem, List<HotSearchItem> allItems,
+                                      String target) {
+        int maxRetries = 3;
+        int delaySeconds = 12;
+        for (int i = 0; i < maxRetries; i++) {
+            try {
+                log.info("退避重试 {}/{}: {}秒后重试 channel={} keyword={}",
+                        i + 1, maxRetries, delaySeconds, channel.getId(), primaryItem.keyword());
+                Thread.sleep(delaySeconds * 1000L);
+                provider.send(channel, primaryItem, allItems, target);
+                return true;
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                return false;
+            } catch (Exception retryEx) {
+                if (!isRateLimited(retryEx)) {
+                    log.error("重试遇到非限频错误: {}", retryEx.getMessage());
+                    return false;
+                }
+                log.warn("重试 {}/{} 仍然限频", i + 1, maxRetries);
+            }
+        }
+        return false;
     }
 }
