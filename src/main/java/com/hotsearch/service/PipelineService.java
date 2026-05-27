@@ -14,6 +14,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import jakarta.annotation.PostConstruct;
+import java.io.*;
+import java.nio.file.*;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -34,11 +37,60 @@ public class PipelineService {
     private final DeliveryService deliveryService;
     private final Map<String, MessageProvider> providerMap;
 
+    private static final String CONFIG_FILE = "data/dedupe-config.properties";
+
     @Value("${app.dedupe.window-hours:6}")
     private volatile int dedupeWindowHours;
 
     public int getDedupeWindowHours() { return dedupeWindowHours; }
-    public void setDedupeWindowHours(int hours) { this.dedupeWindowHours = hours; }
+
+    public void setDedupeWindowHours(int hours) {
+        this.dedupeWindowHours = hours;
+        persistDedupeWindowHours(hours);
+    }
+
+    @PostConstruct
+    private void loadPersistedConfig() {
+        try {
+            Path path = Paths.get(CONFIG_FILE);
+            if (Files.exists(path)) {
+                Properties props = new Properties();
+                try (InputStream in = Files.newInputStream(path)) {
+                    props.load(in);
+                }
+                String val = props.getProperty("dedupe.window-hours");
+                if (val != null) {
+                    int persisted = Integer.parseInt(val);
+                    if (persisted >= 1 && persisted <= 168) {
+                        this.dedupeWindowHours = persisted;
+                        log.info("从持久化配置加载去重窗口: {} 小时", persisted);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("加载持久化配置失败，使用默认值: {} 小时", dedupeWindowHours, e);
+        }
+    }
+
+    private void persistDedupeWindowHours(int hours) {
+        try {
+            Path path = Paths.get(CONFIG_FILE);
+            Files.createDirectories(path.getParent());
+            Properties props = new Properties();
+            // Load existing props first in case we add more later
+            if (Files.exists(path)) {
+                try (InputStream in = Files.newInputStream(path)) {
+                    props.load(in);
+                }
+            }
+            props.setProperty("dedupe.window-hours", String.valueOf(hours));
+            try (OutputStream out = Files.newOutputStream(path)) {
+                props.store(out, "Dedupe config - persists across restarts");
+            }
+        } catch (Exception e) {
+            log.error("持久化去重配置失败", e);
+        }
+    }
 
     public PipelineService(WeiboFetcher weiboFetcher, HotSearchService hotSearchService,
                            SubscriptionService subscriptionService, ChannelService channelService,

@@ -236,6 +236,7 @@ header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
     animation: pulse 2s infinite;
 }
 .hot-label.label-hot { background: rgba(255,145,0,0.12); color: #ff9100; }
+.hot-label.label-boil { background: rgba(245,87,52,0.12); color: #f55734; }
 .hot-label.label-new { background: rgba(0,200,83,0.12); color: #00c853; }
 .hot-label.label-ad { background: rgba(156,39,176,0.12); color: #9c27b0; border: 1px dashed; }
 
@@ -348,6 +349,7 @@ header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
 .ch-ok { color: var(--success); font-size: 12px; }
 .ch-fail { color: var(--danger); font-size: 12px; }
 .ch-err-msg { color: var(--text-light); font-size: 11px; }
+.ch-time { color: var(--text-light); font-size: 10px; margin-left: 6px; }
 .log-time { font-size: 11px; color: var(--text-light); }
 
 /* ==================== Modal ==================== */

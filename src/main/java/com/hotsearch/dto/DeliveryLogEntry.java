@@ -14,6 +14,7 @@ public record DeliveryLogEntry(
         String provider,
         String target,
         String status,
-        String error
+        String error,
+        LocalDateTime deliveredAt
     ) {}
 }

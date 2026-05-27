@@ -58,7 +58,7 @@ public class DeliveryService {
 
     private List<DeliveryLogEntry> groupByKeyword(List<DeliveryLog> logs,
                                                    Map<Long, Channel> channelMap) {
-        // Group by keyword, then aggregate channel deliveries
+        // Group by keyword, keep all delivery attempts per channel+target
         Map<String, List<DeliveryLog>> groupedByKw = logs.stream()
                 .collect(Collectors.groupingBy(
                         DeliveryLog::getKeyword,
@@ -71,8 +71,7 @@ public class DeliveryService {
                     String keyword = entry.getKey();
                     List<DeliveryLog> kwLogs = entry.getValue();
 
-                    // Dedupe channel+target combos, keep latest status
-                    Map<String, DeliveryLogEntry.ChannelDelivery> channelDeliveries = new LinkedHashMap<>();
+                    List<DeliveryLogEntry.ChannelDelivery> channelDeliveries = new ArrayList<>();
                     DeliveryLog latest = kwLogs.get(0);
 
                     for (DeliveryLog log : kwLogs) {
@@ -81,23 +80,20 @@ public class DeliveryService {
                         }
                         Channel ch = channelMap.get(log.getChannelId());
                         String provider = ch != null ? ch.getProvider() : "unknown";
-                        String target = log.getTarget();
-                        String key = provider + "|" + (target != null ? target : "");
-                        // Only keep the latest entry per channel+target
-                        channelDeliveries.putIfAbsent(key,
-                                new DeliveryLogEntry.ChannelDelivery(
-                                        provider,
-                                        target,
-                                        log.getStatus(),
-                                        log.getError()
-                                ));
+                        channelDeliveries.add(new DeliveryLogEntry.ChannelDelivery(
+                                provider,
+                                log.getTarget(),
+                                log.getStatus(),
+                                log.getError(),
+                                log.getDeliveredAt()
+                        ));
                     }
 
                     return new DeliveryLogEntry(
                             keyword,
                             latest.getLabel(),
                             latest.getHotValue(),
-                            new ArrayList<>(channelDeliveries.values()),
+                            channelDeliveries,
                             latest.getDeliveredAt()
                     );
                 })

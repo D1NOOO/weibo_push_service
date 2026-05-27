@@ -153,6 +153,7 @@ const UTILS = {
     getLabelClass(label) {
         if (label === '爆') return 'label-burst';
         if (label === '热') return 'label-hot';
+        if (label === '沸') return 'label-boil';
         if (label === '新') return 'label-new';
         if (label === '荐' || label?.includes('首发')) return 'label-ad';
         return '';
@@ -465,25 +466,26 @@ function updateStats(items) {
     const total = items.length;
     const burst = items.filter(x => x.label === '爆').length;
     const newItems = items.filter(x => x.label === '新').length;
-    const ads = items.filter(x => x.isAd).length;
-    
+    const boil = items.filter(x => x.label === '沸').length;
+
     document.getElementById('stat-total').textContent = total;
     document.getElementById('stat-burst').textContent = burst;
     document.getElementById('stat-new').textContent = newItems;
-    document.getElementById('stat-ads').textContent = ads;
+    document.getElementById('stat-ads').textContent = boil;
 }
 
 function updateCharts(items) {
     // Label distribution
-    const labels = ['爆', '热', '新', '其他有效', '广告', '无标签'];
-    const counts = [0, 0, 0, 0, 0, 0];
+    const labels = ['爆', '热', '沸', '新', '其他有效', '广告', '无标签'];
+    const counts = [0, 0, 0, 0, 0, 0, 0];
     items.forEach(item => {
         if (item.label === '爆') counts[0]++;
         else if (item.label === '热') counts[1]++;
-        else if (item.label === '新') counts[2]++;
-        else if (item.label && !['荐'].includes(item.label)) counts[3]++;
-        else if (item.isAd || item.label === '荐') counts[4]++;
-        else counts[5]++;
+        else if (item.label === '沸') counts[2]++;
+        else if (item.label === '新') counts[3]++;
+        else if (item.label && !['荐'].includes(item.label)) counts[4]++;
+        else if (item.isAd || item.label === '荐') counts[5]++;
+        else counts[6]++;
     });
     
     // Only show non-zero labels
@@ -1077,6 +1079,7 @@ function renderLogEntry(entry) {
             let line = `<span class="${cls}">${icon} ${shortProviderName(ch.provider)}`;
             if (ch.target) line += ` · ${UTILS.escape(ch.target)}`;
             if (ch.error) line += ` <span class="ch-err-msg">(${UTILS.escape(ch.error)})</span>`;
+            if (ch.deliveredAt) line += ` <span class="ch-time">${UTILS.formatTime(ch.deliveredAt)}</span>`;
             line += '</span>';
             return line;
         }).join('');
