@@ -11,7 +11,13 @@
     <!-- 登录页 -->
     <div id="login-page" class="page">
         <div class="login-card">
-            <h1>🔥 微博热搜监控</h1>
+            <div class="login-brand">
+                <span class="brand-mark">热</span>
+                <div>
+                    <h1>微博热搜监控</h1>
+                    <p>订阅热点、追踪趋势、自动推送</p>
+                </div>
+            </div>
             <form id="login-form">
                 <input type="text" id="username" placeholder="用户名" required autocomplete="username">
                 <input type="password" id="password" placeholder="密码" required autocomplete="current-password">
@@ -24,7 +30,7 @@
     <!-- 主面板 -->
     <div id="dashboard-page" class="page hidden">
         <header>
-            <h1>🔥 微博热搜监控</h1>
+            <h1><span class="brand-mark brand-mark-sm">热</span>微博热搜监控</h1>
             <div class="header-right">
                 <span id="user-info"></span>
                 <button id="btn-theme" class="btn btn-icon" title="切换暗色/亮色模式 (⌘T)">🌙</button>
@@ -149,10 +155,42 @@
                             <option value="telegram">Telegram Bot</option>
                             <option value="generic">通用 Webhook</option>
                         </select>
+                        <!-- 飞书专属字段：支持自定义机器人 Webhook 或自建应用机器人 -->
+                        <div id="ch-field-feishu-mode" style="display:none;">
+                            <label>接入方式</label>
+                            <select id="ch-feishu-mode">
+                                <option value="webhook">群自定义机器人 Webhook</option>
+                                <option value="app">自建应用机器人</option>
+                            </select>
+                        </div>
                         <!-- 通用字段：非微信通道使用 -->
                         <div id="ch-field-webhook">
                             <label id="ch-url-label">Webhook URL</label>
                             <input type="url" id="ch-webhook" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/...">
+                        </div>
+                        <div id="ch-field-feishu-app" style="display:none;">
+                            <label>App ID</label>
+                            <input type="text" id="ch-feishu-app-id" placeholder="cli_xxxxxxxxxxxxxxxx">
+                            <label>App Secret</label>
+                            <input type="text" id="ch-feishu-app-secret" placeholder="应用凭证 App Secret">
+                            <label>接收 ID</label>
+                            <input type="text" id="ch-feishu-receive-id" placeholder="oc_xxxxxxxxxxxxxxxx">
+                            <label>接收 ID 类型</label>
+                            <select id="ch-feishu-receive-id-type">
+                                <option value="chat_id">chat_id（群聊）</option>
+                                <option value="open_id">open_id（用户）</option>
+                                <option value="user_id">user_id（用户）</option>
+                                <option value="email">email（邮箱）</option>
+                            </select>
+                            <div class="hint-text">💡 自建应用需开启机器人能力，并申请发送消息权限；群聊需把机器人加入群</div>
+                        </div>
+                        <!-- Telegram 专属字段 -->
+                        <div id="ch-field-telegram" style="display:none;">
+                            <label>Bot Token</label>
+                            <input type="text" id="ch-telegram-token" placeholder="123456789:AAExampleTokenFromBotFather">
+                            <label>Chat ID</label>
+                            <input type="text" id="ch-telegram-chat" placeholder="-1001234567890 或 @channel_username">
+                            <div class="hint-text">💡 与 @BotFather 创建机器人后，把机器人加入群聊，再填写群聊 Chat ID</div>
                         </div>
                         <!-- 微信专属字段 -->
                         <div id="ch-field-wechat" style="display:none;">

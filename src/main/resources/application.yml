@@ -20,6 +20,8 @@ jwt:
   expiration-ms: 86400000
 
 app:
+  cors:
+    allowed-origin-patterns: "http://localhost:8080,http://127.0.0.1:8080"
   schedule:
     cron: "0 */10 * * * *"
   dedupe:
@@ -27,6 +29,7 @@ app:
   fetcher:
     user-agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
     timeout-seconds: 15
+    mock-enabled: false
     # Optional: paste your Weibo cookie here if 403 persists
     # cookie: "SUB=your_sub_cookie_value_here"
 

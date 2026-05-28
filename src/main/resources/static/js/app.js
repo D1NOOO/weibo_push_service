@@ -1,15 +1,16 @@
 // ==================== Design Tokens ====================
 const DESIGN = {
-    primary: '#ff6b35',
-    danger: '#ff1744',
-    success: '#00c853',
-    warning: '#ff9100',
-    orangeCoral: '#ff6b35',
-    orangeDeep: '#e55a2b',
-    pinkMagenta: '#e84393',
-    purpleNeon: '#6c5ce7',
-    textDark: '#1a1a2e',
-    textLight: '#8e8ea0'
+    primary: '#e7352f',
+    danger: '#d92d42',
+    success: '#0f9f5f',
+    warning: '#d97706',
+    orangeCoral: '#ff7a45',
+    orangeDeep: '#b91f24',
+    pinkMagenta: '#e7352f',
+    purpleNeon: '#6e56cf',
+    accent: '#186bff',
+    textDark: '#151924',
+    textLight: '#8b94a4'
 };
 
 // ==================== API Layer ====================
@@ -46,6 +47,7 @@ class APIService {
     async get(path) { return this.request('GET', path); }
     async post(path, body) { return this.request('POST', path, body); }
     async put(path, body) { return this.request('PUT', path, body); }
+    async patch(path, body) { return this.request('PATCH', path, body); }
     async delete(path) { return this.request('DELETE', path); }
 
     setToken(token) { 
@@ -201,7 +203,7 @@ const ChartManager = {
                     data: [],
                     backgroundColor: [
                         DESIGN.orangeCoral, DESIGN.danger, DESIGN.warning,
-                        DESIGN.success, DESIGN.purpleNeon, DESIGN.textLight
+                        DESIGN.success, DESIGN.purpleNeon, DESIGN.accent, DESIGN.textLight
                     ],
                     borderWidth: 0,
                     borderRadius: 4
@@ -801,7 +803,7 @@ function editSubscription(id) {
 }
 
 function toggleSubscription(id, enabled) {
-    API.put(`/api/subscriptions/${id}`, { enabled }).then(() => {
+    API.patch(`/api/subscriptions/${id}/enabled`, { enabled }).then(() => {
         UTILS.showToast(`订阅已${enabled ? '启用' : '禁用'}`, 'success');
         loadSubscriptions();
     }).catch(err => UTILS.showToast(err.message, 'error'));
@@ -856,10 +858,7 @@ function loadChannels() {
                             </div>
                         </div>
                     </div>
-                    <div class="item-meta">${ch.provider === 'wechat'
-                        ? `目标聊天: ${UTILS.escape(ch.config?.chat || '未配置')} · API: ${UTILS.escape(ch.config?.apiBaseUrl || 'http://localhost:5001')}`
-                        : `Webhook: ${maskWebhookUrl(ch.config?.webhookUrl || ch.config?.webhook_url || '')}`
-                    }</div>
+                    <div class="item-meta">${describeChannelConfig(ch)}</div>
                     <div class="item-meta">创建时间: ${UTILS.formatTime(ch.createdAt)}</div>
                     <div class="item-actions">
                         <button class="btn btn-sm" onclick="sendTestMessage(${ch.id})" title="发送测试消息">测试</button>
@@ -897,20 +896,39 @@ function maskWebhookUrl(url) {
     return url.substring(0, 40) + (url.length > 40 ? '...' : '');
 }
 
+function describeChannelConfig(ch) {
+    const config = ch.config || {};
+    if (ch.provider === 'wechat') {
+        return `目标聊天: ${UTILS.escape(config.chat || '未配置')} · API: ${UTILS.escape(config.apiBaseUrl || 'http://localhost:5001')}`;
+    }
+    if (ch.provider === 'feishu' && config.mode === 'app') {
+        return `自建应用: ${UTILS.escape(config.appId || '未配置')} · 接收: ${UTILS.escape(config.receiveId || config.token || '未配置')}`;
+    }
+    if (ch.provider === 'telegram') {
+        return `Bot Token: ${UTILS.escape(config.token || '未配置')} · Chat ID: ${UTILS.escape(config.chatId || '未配置')}`;
+    }
+    return `Webhook: ${maskWebhookUrl(config.webhookUrl || config.webhook_url || '')}`;
+}
+
 function updateProviderHint() {
     const provider = document.getElementById('ch-provider').value;
     const hintEl = document.getElementById('ch-provider-hint');
     const urlLabel = document.getElementById('ch-url-label');
+    const webhookInput = document.getElementById('ch-webhook');
+    const fieldFeishuMode = document.getElementById('ch-field-feishu-mode');
+    const feishuMode = document.getElementById('ch-feishu-mode').value;
     const fieldWebhook = document.getElementById('ch-field-webhook');
+    const fieldFeishuApp = document.getElementById('ch-field-feishu-app');
+    const fieldTelegram = document.getElementById('ch-field-telegram');
     const fieldWechat = document.getElementById('ch-field-wechat');
 
     const hints = {
-        feishu: '💡 飞书群机器人 → 添加机器人 → 复制 Webhook 地址',
-        dingtalk: '💡 钉钉群机器人 → 安全设置 → Webhook → 复制地址',
-        wecom: '💡 企业微信群机器人 → 右键添加机器人 → 获取 Webhook',
+        feishu: '💡 飞书群机器人 → 添加机器人 → 复制自定义机器人 Webhook 地址',
+        dingtalk: '💡 钉钉群机器人 → 安全设置 → Webhook → 复制带 access_token 的地址',
+        wecom: '💡 企业微信群 → 添加群机器人 → 复制 key 参数形式的 Webhook 地址',
         wechat: '💡 通过 WeChatBot RESTful API 发送微信消息',
-        telegram: '💡 与 @BotFather 对话创建机器人 → 获取 bot token → /setwebhook',
-        generic: '💡 任意支持 POST JSON 的 HTTP 端点'
+        telegram: '💡 Telegram 需要 Bot Token 和 Chat ID，本服务会直接调用 sendMessage API',
+        generic: '💡 任意支持 POST JSON 的 HTTP/HTTPS 端点'
     };
 
     const labels = {
@@ -921,15 +939,50 @@ function updateProviderHint() {
         generic: 'Webhook URL'
     };
 
+    const placeholders = {
+        feishu: 'https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+        dingtalk: 'https://oapi.dingtalk.com/robot/send?access_token=xxxxxxxxxxxxxxxx',
+        wecom: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+        generic: 'https://example.com/webhook/weibo-hotsearch'
+    };
+
+    fieldFeishuMode.style.display = provider === 'feishu' ? '' : 'none';
+
+    if (provider === 'feishu' && feishuMode === 'app') {
+        fieldWebhook.style.display = 'none';
+        fieldFeishuApp.style.display = '';
+        fieldTelegram.style.display = 'none';
+        fieldWechat.style.display = 'none';
+        hintEl.textContent = '💡 自建应用机器人：App ID + App Secret 获取 tenant_access_token，再向接收 ID 发送消息';
+    } else if (provider === 'feishu') {
+        fieldWebhook.style.display = '';
+        fieldFeishuApp.style.display = 'none';
+        fieldTelegram.style.display = 'none';
+        fieldWechat.style.display = 'none';
+        hintEl.textContent = hints.feishu;
+        urlLabel.textContent = labels.feishu;
+        webhookInput.placeholder = placeholders.feishu;
+    } else
     if (provider === 'wechat') {
         fieldWebhook.style.display = 'none';
+        fieldFeishuApp.style.display = 'none';
+        fieldTelegram.style.display = 'none';
         fieldWechat.style.display = '';
         hintEl.textContent = hints.wechat;
+    } else if (provider === 'telegram') {
+        fieldWebhook.style.display = 'none';
+        fieldFeishuApp.style.display = 'none';
+        fieldTelegram.style.display = '';
+        fieldWechat.style.display = 'none';
+        hintEl.textContent = hints.telegram;
     } else {
         fieldWebhook.style.display = '';
+        fieldFeishuApp.style.display = 'none';
+        fieldTelegram.style.display = 'none';
         fieldWechat.style.display = 'none';
         hintEl.textContent = hints[provider] || '请填写通道配置';
         urlLabel.textContent = labels[provider] || '配置';
+        webhookInput.placeholder = placeholders[provider] || placeholders.generic;
     }
 }
 
@@ -943,16 +996,29 @@ function showChannelModal(channel = null) {
     if (channel) {
         document.getElementById('ch-id').value = channel.id;
         document.getElementById('ch-provider').value = channel.provider;
-        if (channel.provider === 'wechat') {
+        if (channel.provider === 'feishu') {
+            const mode = channel.config?.mode || (channel.config?.appId ? 'app' : 'webhook');
+            document.getElementById('ch-feishu-mode').value = mode;
+            document.getElementById('ch-webhook').value = channel.config?.webhookUrl || channel.config?.webhook_url || '';
+            document.getElementById('ch-feishu-app-id').value = channel.config?.appId || channel.config?.app_id || '';
+            document.getElementById('ch-feishu-app-secret').value = channel.config?.appSecret || channel.config?.app_secret || '';
+            document.getElementById('ch-feishu-receive-id').value = channel.config?.receiveId || channel.config?.token || '';
+            document.getElementById('ch-feishu-receive-id-type').value = channel.config?.receiveIdType || 'chat_id';
+        } else if (channel.provider === 'wechat') {
             document.getElementById('ch-wechat-api').value = channel.config?.apiBaseUrl || 'http://localhost:5001';
             document.getElementById('ch-wechat-token').value = channel.config?.token || '';
             document.getElementById('ch-wechat-chat').value = channel.config?.chat || '';
+        } else if (channel.provider === 'telegram') {
+            document.getElementById('ch-telegram-token').value = channel.config?.token || '';
+            document.getElementById('ch-telegram-chat').value = channel.config?.chatId || '';
         } else {
             document.getElementById('ch-webhook').value = channel.config?.webhookUrl || channel.config?.webhook_url || '';
         }
         document.getElementById('ch-enabled').checked = channel.enabled !== false;
     } else {
         document.getElementById('ch-form').reset();
+        document.getElementById('ch-feishu-mode').value = 'webhook';
+        document.getElementById('ch-feishu-receive-id-type').value = 'chat_id';
         document.getElementById('ch-wechat-api').value = 'http://localhost:5001';
         document.getElementById('ch-enabled').checked = true;
     }
@@ -964,6 +1030,7 @@ function showChannelModal(channel = null) {
 document.getElementById('btn-add-ch').addEventListener('click', () => showChannelModal());
 
 document.getElementById('ch-provider').addEventListener('change', updateProviderHint);
+document.getElementById('ch-feishu-mode').addEventListener('change', updateProviderHint);
 
 document.getElementById('ch-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -972,11 +1039,32 @@ document.getElementById('ch-form').addEventListener('submit', async (e) => {
     const enabled = document.getElementById('ch-enabled').checked;
 
     let config;
-    if (provider === 'wechat') {
+    if (provider === 'feishu') {
+        const mode = document.getElementById('ch-feishu-mode').value;
+        if (mode === 'app') {
+            config = {
+                mode,
+                appId: document.getElementById('ch-feishu-app-id').value.trim(),
+                appSecret: document.getElementById('ch-feishu-app-secret').value.trim(),
+                receiveId: document.getElementById('ch-feishu-receive-id').value.trim(),
+                receiveIdType: document.getElementById('ch-feishu-receive-id-type').value
+            };
+        } else {
+            config = {
+                mode,
+                webhookUrl: document.getElementById('ch-webhook').value.trim()
+            };
+        }
+    } else if (provider === 'wechat') {
         config = {
             apiBaseUrl: document.getElementById('ch-wechat-api').value.trim() || 'http://localhost:5001',
             token: document.getElementById('ch-wechat-token').value.trim(),
             chat: document.getElementById('ch-wechat-chat').value.trim()
+        };
+    } else if (provider === 'telegram') {
+        config = {
+            token: document.getElementById('ch-telegram-token').value.trim(),
+            chatId: document.getElementById('ch-telegram-chat').value.trim()
         };
     } else {
         const webhook = document.getElementById('ch-webhook').value.trim();
@@ -1013,7 +1101,7 @@ function editChannel(id) {
 }
 
 function toggleChannel(id, enabled) {
-    API.put(`/api/channels/${id}`, { enabled }).then(() => {
+    API.patch(`/api/channels/${id}/enabled`, { enabled }).then(() => {
         UTILS.showToast(`通道已${enabled ? '启用' : '禁用'}`, 'success');
         loadChannels();
     }).catch(err => UTILS.showToast(err.message, 'error'));

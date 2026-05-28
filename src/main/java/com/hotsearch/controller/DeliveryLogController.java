@@ -39,9 +39,11 @@ public class DeliveryLogController {
     }
 
     @DeleteMapping
-    @Operation(summary = "清空所有推送日志（重置去重状态）")
-    public ResponseEntity<Map<String, String>> clearAll() {
-        deliveryService.clearAll();
-        return ResponseEntity.ok(Map.of("message", "推送日志已清空，去重状态已重置"));
+    @Operation(summary = "清空当前用户推送日志（重置当前用户去重状态）")
+    public ResponseEntity<Map<String, String>> clearForUser(
+            @RequestHeader("Authorization") String authHeader) {
+        Long userId = getUserId(authHeader);
+        deliveryService.clearByUser(userId);
+        return ResponseEntity.ok(Map.of("message", "当前用户推送日志已清空，去重状态已重置"));
     }
 }

@@ -13,4 +13,5 @@ public interface DeliveryLogRepository extends JpaRepository<DeliveryLog, Long> 
 
     // Find logs by channel IDs belonging to a specific user
     List<DeliveryLog> findByChannelIdInAndDeliveredAtAfterOrderByDeliveredAtDesc(List<Long> channelIds, LocalDateTime since);
+    void deleteByChannelIdIn(List<Long> channelIds);
 }

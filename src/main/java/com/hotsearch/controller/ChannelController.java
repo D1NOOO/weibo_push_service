@@ -2,6 +2,7 @@ package com.hotsearch.controller;
 
 import com.hotsearch.dto.ChannelRequest;
 import com.hotsearch.dto.ChannelResponse;
+import com.hotsearch.dto.EnabledRequest;
 import com.hotsearch.dto.HotSearchItem;
 import com.hotsearch.entity.Channel;
 import com.hotsearch.provider.MessageProvider;
@@ -76,17 +77,26 @@ public class ChannelController {
         return ResponseEntity.noContent().build();
     }
 
+    @PatchMapping("/{id}/enabled")
+    @Operation(summary = "启用或禁用通道")
+    public ResponseEntity<ChannelResponse> updateEnabled(
+            @RequestHeader("Authorization") String authHeader,
+            @PathVariable Long id,
+            @Valid @RequestBody EnabledRequest req) {
+        return ResponseEntity.ok(channelService.updateEnabled(getUserId(authHeader), id, req.enabled()));
+    }
+
     @PostMapping("/{id}/test")
     @Operation(summary = "发送测试消息")
     public ResponseEntity<Map<String, String>> test(
             @RequestHeader("Authorization") String authHeader,
             @PathVariable Long id) {
         Long userId = getUserId(authHeader);
-        ChannelResponse ch = channelService.getById(userId, id);
+        Channel ch = channelService.getEntityById(userId, id);
 
-        MessageProvider provider = providerMap.get(ch.provider());
+        MessageProvider provider = providerMap.get(ch.getProvider());
         if (provider == null) {
-            throw new RuntimeException("未知的推送提供者: " + ch.provider());
+            throw new RuntimeException("未知的推送提供者: " + ch.getProvider());
         }
 
         HotSearchItem testItem = new HotSearchItem(
@@ -94,11 +104,7 @@ public class ChannelController {
                 "https://s.weibo.com/weibo?q=测试热搜");
         List<HotSearchItem> allItems = List.of(testItem);
 
-        Channel channel = new Channel();
-        channel.setProvider(ch.provider());
-        channel.setConfigMap(ch.config());
-
-        provider.send(channel, testItem, allItems);
+        provider.send(ch, testItem, allItems);
         return ResponseEntity.ok(Map.of("message", "测试消息发送成功"));
     }
 }

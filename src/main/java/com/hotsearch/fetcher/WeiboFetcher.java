@@ -32,6 +32,9 @@ public class WeiboFetcher {
     @Value("${app.fetcher.cookie:}")
     private String cookie;
 
+    @Value("${app.fetcher.mock-enabled:false}")
+    private boolean mockEnabled;
+
     private final ObjectMapper objectMapper;
 
     public WeiboFetcher(ObjectMapper objectMapper) {
@@ -55,9 +58,13 @@ public class WeiboFetcher {
             log.warn("HTML页面抓取失败: {}", e.getMessage());
         }
 
-        // Fallback to mock
-        log.info("使用模拟数据");
-        return mockData();
+        if (mockEnabled) {
+            log.warn("真实抓取失败，使用模拟数据。请勿在生产环境开启 app.fetcher.mock-enabled");
+            return mockData();
+        }
+
+        log.warn("真实抓取失败，返回空热搜列表");
+        return List.of();
     }
 
     /**

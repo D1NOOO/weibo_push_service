@@ -26,13 +26,19 @@ public class FeishuProvider implements MessageProvider {
     @Override
     public void send(Channel channel, HotSearchItem primaryItem, List<HotSearchItem> allItems) {
         Map<String, Object> config = channel.getConfigMap();
+        String mode = (String) config.getOrDefault("mode", "webhook");
+        if ("app".equals(mode)) {
+            sendViaApp(config, primaryItem, allItems);
+            return;
+        }
+
         String webhookUrl = (String) config.get("webhookUrl");
         if (webhookUrl == null || webhookUrl.isBlank()) {
             throw new RuntimeException("飞书webhook地址未配置");
         }
 
         try {
-            Map<String, Object> card = buildCard(primaryItem, allItems);
+            Map<String, Object> card = buildWebhookCard(primaryItem, allItems);
             String json = objectMapper.writeValueAsString(card);
 
             String resp = Jsoup.connect(webhookUrl)
@@ -55,10 +61,91 @@ public class FeishuProvider implements MessageProvider {
         }
     }
 
-    private Map<String, Object> buildCard(HotSearchItem primaryItem, List<HotSearchItem> allItems) {
+    private void sendViaApp(Map<String, Object> config, HotSearchItem primaryItem, List<HotSearchItem> allItems) {
+        String appId = getString(config, "appId", "app_id");
+        String appSecret = getString(config, "appSecret", "app_secret");
+        String receiveId = getString(config, "receiveId", "token");
+        String receiveIdType = getString(config, "receiveIdType");
+        if (receiveIdType == null || receiveIdType.isBlank()) receiveIdType = "chat_id";
+
+        if (appId == null || appId.isBlank() || appSecret == null || appSecret.isBlank()) {
+            throw new RuntimeException("飞书 App ID 或 App Secret 未配置");
+        }
+        if (receiveId == null || receiveId.isBlank()) {
+            throw new RuntimeException("飞书接收ID未配置");
+        }
+
+        try {
+            String accessToken = getTenantAccessToken(appId, appSecret);
+            Map<String, Object> body = new HashMap<>();
+            body.put("receive_id", receiveId);
+            body.put("msg_type", "interactive");
+            body.put("content", objectMapper.writeValueAsString(buildCardContent(primaryItem, allItems)));
+
+            String json = objectMapper.writeValueAsString(body);
+            String resp = Jsoup.connect("https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=" + receiveIdType)
+                    .requestBody(json)
+                    .header("Authorization", "Bearer " + accessToken)
+                    .header("Content-Type", "application/json")
+                    .ignoreContentType(true)
+                    .post()
+                    .body().text();
+
+            Map<String, Object> respMap = objectMapper.readValue(resp, Map.class);
+            Object code = respMap.get("code");
+            if (code instanceof Number && ((Number) code).intValue() != 0) {
+                String msg = respMap.get("msg") != null ? respMap.get("msg").toString() : "未知错误";
+                throw new RuntimeException("飞书应用消息返回错误 code=" + code + ": " + msg);
+            }
+
+            log.info("飞书应用消息推送成功: keyword={}", primaryItem.keyword());
+        } catch (Exception e) {
+            throw new RuntimeException("飞书应用消息推送失败: " + e.getMessage(), e);
+        }
+    }
+
+    private String getTenantAccessToken(String appId, String appSecret) throws Exception {
+        Map<String, Object> body = new HashMap<>();
+        body.put("app_id", appId);
+        body.put("app_secret", appSecret);
+
+        String resp = Jsoup.connect("https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal")
+                .requestBody(objectMapper.writeValueAsString(body))
+                .header("Content-Type", "application/json")
+                .ignoreContentType(true)
+                .post()
+                .body().text();
+
+        Map<String, Object> respMap = objectMapper.readValue(resp, Map.class);
+        Object code = respMap.get("code");
+        if (code instanceof Number && ((Number) code).intValue() != 0) {
+            String msg = respMap.get("msg") != null ? respMap.get("msg").toString() : "未知错误";
+            throw new RuntimeException("获取飞书 tenant_access_token 失败 code=" + code + ": " + msg);
+        }
+
+        Object token = respMap.get("tenant_access_token");
+        if (token == null || token.toString().isBlank()) {
+            throw new RuntimeException("飞书 tenant_access_token 为空");
+        }
+        return token.toString();
+    }
+
+    private String getString(Map<String, Object> config, String... keys) {
+        for (String key : keys) {
+            Object value = config.get(key);
+            if (value != null) return value.toString();
+        }
+        return null;
+    }
+
+    private Map<String, Object> buildWebhookCard(HotSearchItem primaryItem, List<HotSearchItem> allItems) {
         Map<String, Object> card = new HashMap<>();
         card.put("msg_type", "interactive");
+        card.put("card", buildCardContent(primaryItem, allItems));
+        return card;
+    }
 
+    private Map<String, Object> buildCardContent(HotSearchItem primaryItem, List<HotSearchItem> allItems) {
         Map<String, Object> cardContent = new HashMap<>();
         cardContent.put("header", Map.of(
                 "title", Map.of("content", "🔥 微博热搜提醒", "tag", "plain_text"),
@@ -99,9 +186,7 @@ public class FeishuProvider implements MessageProvider {
         )));
 
         cardContent.put("elements", elements);
-        card.put("card", cardContent);
-
-        return card;
+        return cardContent;
     }
 
     private String escapeMd(String text) {

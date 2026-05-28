@@ -6,6 +6,7 @@ import com.hotsearch.entity.DeliveryLog;
 import com.hotsearch.repository.ChannelRepository;
 import com.hotsearch.repository.DeliveryLogRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -28,6 +29,15 @@ public class DeliveryService {
 
     public void clearAll() {
         deliveryLogRepository.deleteAll();
+    }
+
+    @Transactional
+    public int clearByUser(Long userId) {
+        List<Channel> userChannels = channelRepository.findByUserId(userId);
+        if (userChannels.isEmpty()) return 0;
+        List<Long> channelIds = userChannels.stream().map(Channel::getId).toList();
+        deliveryLogRepository.deleteByChannelIdIn(channelIds);
+        return channelIds.size();
     }
 
     public boolean isDuplicate(String keyword, Long channelId, LocalDateTime since) {

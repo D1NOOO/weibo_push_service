@@ -2,6 +2,7 @@ package com.hotsearch.controller;
 
 import com.hotsearch.dto.SubscriptionRequest;
 import com.hotsearch.dto.SubscriptionResponse;
+import com.hotsearch.dto.EnabledRequest;
 import com.hotsearch.service.SubscriptionService;
 import com.hotsearch.util.JwtUtil;
 import io.swagger.v3.oas.annotations.Operation;
@@ -67,5 +68,14 @@ public class SubscriptionController {
             @PathVariable Long id) {
         subscriptionService.delete(getUserId(authHeader), id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{id}/enabled")
+    @Operation(summary = "启用或禁用订阅")
+    public ResponseEntity<SubscriptionResponse> updateEnabled(
+            @RequestHeader("Authorization") String authHeader,
+            @PathVariable Long id,
+            @Valid @RequestBody EnabledRequest req) {
+        return ResponseEntity.ok(subscriptionService.updateEnabled(getUserId(authHeader), id, req.enabled()));
     }
 }

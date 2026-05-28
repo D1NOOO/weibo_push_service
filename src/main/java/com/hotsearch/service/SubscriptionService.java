@@ -52,6 +52,15 @@ public class SubscriptionService {
         return toResponse(subscriptionRepository.save(sub));
     }
 
+    @Transactional
+    public SubscriptionResponse updateEnabled(Long userId, Long id, boolean enabled) {
+        Subscription sub = subscriptionRepository.findById(id)
+                .filter(s -> s.getUserId().equals(userId))
+                .orElseThrow(() -> new RuntimeException("订阅不存在"));
+        sub.setEnabled(enabled);
+        return toResponse(subscriptionRepository.save(sub));
+    }
+
     public SubscriptionResponse getById(Long userId, Long id) {
         Subscription sub = subscriptionRepository.findById(id)
                 .filter(s -> s.getUserId().equals(userId))

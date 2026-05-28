@@ -86,11 +86,41 @@ app:
 
 | 通道 | 配置字段 |
 |------|----------|
-| 飞书 | `webhookUrl` — 飞书机器人 Webhook 地址 |
+| 飞书 Webhook | `mode=webhook` + `webhookUrl` — 飞书群自定义机器人 Webhook 地址 |
+| 飞书自建应用 | `mode=app` + `appId` + `appSecret` + `receiveId` + `receiveIdType` — 通过飞书应用机器人发送消息 |
 | 钉钉 | `webhookUrl` — 钉钉机器人 Webhook 地址 |
 | 企业微信 | `webhookUrl` — 企微机器人 Webhook 地址 |
 | Telegram | `token` + `chatId` — Bot Token 和 Chat ID |
 | 通用 Webhook | `webhookUrl` — 任意 HTTP POST 端点 |
+
+## Roadmap
+
+详细产品规划见 [product-plan.md](./product-plan.md)。当前产品化方向是：以“微博热搜订阅提醒”为核心能力，后续承载在微信工具聚合小程序中；主服务负责抓取、匹配、去重和通知策略，微信云函数只作为发送小程序订阅消息的轻量钩子。
+
+### P0：核心闭环
+
+- 微信小程序登录：通过 `wx.login` 和主服务 `code2session` 建立 `openid -> userId`。
+- 用户私有数据：订阅规则、通道配置、命中事件、通知日志按 `userId` 收口；热搜快照作为全局共享数据。
+- 热搜订阅创建：支持关键词、标签过滤、最低热度和排除词。
+- 命中事件聚合：新增 `match_events`，按 `userId + subscriptionId + keyword + activeWindow` 聚合，避免抓取频率越高命中次数越失真。
+- 微信订阅消息：小程序端申请授权，主服务记录可发送额度，云函数负责调用微信订阅消息 API。
+- 安全云函数钩子：主服务调用云函数时增加 shared secret、timestamp、nonce、signature 和防重放校验。
+- 通知降噪：默认只在首次命中、标签升级、进入高排名或热度越过阈值时通知。
+
+### P1：体验增强
+
+- 订阅规则预览：创建规则时即时展示当前热搜可命中内容。
+- 命中记录列表：展示今日新增、观察中、已通知、未通知原因。
+- 通道管理增强：完善小程序订阅消息、飞书 Webhook、飞书自建应用、企微、钉钉、Telegram、通用 Webhook 的配置与测试体验。
+- 抓取状态页：展示最近抓取时间、抓取条数、失败原因和下一次抓取时间。
+- 简单工具广场：先放热搜提醒、天气、计算器、汇率、第三方小程序跳转等轻量入口。
+
+### P2：后续扩展
+
+- 完整工具生态与大量第三方小程序跳转。
+- 团队/租户体系、复杂权限和操作审计。
+- 报表中心、日报周报和高级趋势分析。
+- 计费系统、AI 舆情分析、多平台 App。
 
 ## API 文档
 
