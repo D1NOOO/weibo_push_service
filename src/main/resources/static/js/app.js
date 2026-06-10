@@ -10,7 +10,16 @@ const DESIGN = {
     purpleNeon: '#6e56cf',
     accent: '#186bff',
     textDark: '#151924',
-    textLight: '#8b94a4'
+    textLight: '#8b94a4',
+    labelPalette: {
+        burst: '#b4232e',
+        hot: '#c9822a',
+        boil: '#6e56cf',
+        fresh: '#16a36f',
+        other: '#3f6f8f',
+        ad: '#9a7a50',
+        none: '#9aa1ac'
+    }
 };
 
 // ==================== API Layer ====================
@@ -201,11 +210,9 @@ const ChartManager = {
                 labels: [],
                 datasets: [{
                     data: [],
-                    backgroundColor: [
-                        DESIGN.orangeCoral, DESIGN.danger, DESIGN.warning,
-                        DESIGN.success, DESIGN.purpleNeon, DESIGN.accent, DESIGN.textLight
-                    ],
-                    borderWidth: 0,
+                    backgroundColor: [],
+                    borderColor: getComputedStyle(document.documentElement).getPropertyValue('--card').trim() || '#ffffff',
+                    borderWidth: 3,
                     borderRadius: 4
                 }]
             },
@@ -279,6 +286,7 @@ const ChartManager = {
 
         this.labelChart.data.labels = data.labels;
         this.labelChart.data.datasets[0].data = data.values;
+        this.labelChart.data.datasets[0].backgroundColor = data.colors || [];
         this.labelChart.update();
     },
 
@@ -427,7 +435,7 @@ async function loadHotSearch() {
             : items;
         
         if (!filteredItems.length) {
-            container.innerHTML = `<div class="empty"><div class="empty-icon">🔍</div><p>未找到匹配 "${search}" 的热搜</p></div>`;
+            container.innerHTML = `<div class="empty"><div class="empty-icon">—</div><p>未找到匹配 "${search}" 的热搜</p></div>`;
             return;
         }
         
@@ -441,7 +449,7 @@ async function loadHotSearch() {
             document.querySelector('.freshness-banner .freshness-time').textContent = UTILS.formatTime(fetchedAt);
         }
     } catch (e) {
-        container.innerHTML = '<div class="empty"><div class="empty-icon">️⚠️</div><p>加载失败: ' + UTILS.escape(e.message) + '</p></div>';
+        container.innerHTML = '<div class="empty"><div class="empty-icon">!</div><p>加载失败: ' + UTILS.escape(e.message) + '</p></div>';
         UTILS.showToast('热搜加载失败', 'error');
     }
 }
@@ -453,7 +461,7 @@ function renderHotItem(item, i) {
             <span class="hot-rank ${i < 3 ? 'top' : UTILS.getRankClass(rank)}">${rank}</span>
             <div class="hot-info">
                 <div class="hot-keyword">
-                    ${item.url ? `<a href="${UTILS.escape(item.url)}" target="_blank" rel="noopener" class="hot-link">${UTILS.escape(item.keyword)}</a>` : UTILS.escape(item.keyword)}${item.isAd ? ' &nbsp;📌' : ''}
+                    ${item.url ? `<a href="${UTILS.escape(item.url)}" target="_blank" rel="noopener" class="hot-link">${UTILS.escape(item.keyword)}</a>` : UTILS.escape(item.keyword)}${item.isAd ? ' · 广告' : ''}
                 </div>
                 <div class="hot-meta">${item.label ? UTILS.escape(item.label) : ''} ${item.isAd ? '广告推广' : ''}</div>
             </div>
@@ -480,6 +488,15 @@ function updateCharts(items) {
     // Label distribution
     const labels = ['爆', '热', '沸', '新', '其他有效', '广告', '无标签'];
     const counts = [0, 0, 0, 0, 0, 0, 0];
+    const colors = [
+        DESIGN.labelPalette.burst,
+        DESIGN.labelPalette.hot,
+        DESIGN.labelPalette.boil,
+        DESIGN.labelPalette.fresh,
+        DESIGN.labelPalette.other,
+        DESIGN.labelPalette.ad,
+        DESIGN.labelPalette.none
+    ];
     items.forEach(item => {
         if (item.label === '爆') counts[0]++;
         else if (item.label === '热') counts[1]++;
@@ -493,9 +510,10 @@ function updateCharts(items) {
     // Only show non-zero labels
     const validLabels = labels.filter((_, i) => counts[i] > 0);
     const validCounts = counts.filter(c => c > 0);
+    const validColors = colors.filter((_, i) => counts[i] > 0);
     
     if (ChartManager.labelChart) {
-        ChartManager.updateLabelData({ labels: validLabels, values: validCounts });
+        ChartManager.updateLabelData({ labels: validLabels, values: validCounts, colors: validColors });
     }
 
     // Heat top 10
@@ -649,7 +667,7 @@ function loadSubscriptions() {
         if (!subscriptions.length) {
             container.innerHTML = `
                 <div class="empty onboarding">
-                    <div class="empty-icon">📋</div>
+                    <div class="empty-icon">—</div>
                     <h3>订阅管理</h3>
                     <p>创建订阅规则，匹配的热搜会自动推送到指定通道</p>
                     <p>支持关键词匹配、正则表达式、标签过滤</p>
@@ -669,7 +687,7 @@ function loadSubscriptions() {
         if (!filtered.length) {
             container.innerHTML = `
                 <div class="empty">
-                    <div class="empty-icon">🔍</div>
+                    <div class="empty-icon">—</div>
                     <p>未找到匹配 "${search}" 的订阅</p>
                 </div>
             `;
@@ -684,8 +702,8 @@ function loadSubscriptions() {
                         <div style="display:flex;align-items:center;gap:6px;">
                             <span class="status-dot ${sub.enabled ? 'on' : 'off'}"></span>
                             <div style="display:flex;gap:4px;">
-                                <button class="btn btn-sm btn-ghost" onclick="editSubscription(${sub.id})" title="编辑">✏️</button>
-                                <button class="btn btn-sm btn-ghost btn-danger" onclick="deleteSubscription(${sub.id})" title="删除">🗑️</button>
+                                <button class="btn btn-sm btn-ghost" onclick="editSubscription(${sub.id})" title="编辑">编辑</button>
+                                <button class="btn btn-sm btn-ghost btn-danger" onclick="deleteSubscription(${sub.id})" title="删除">删除</button>
                             </div>
                         </div>
                     </div>
@@ -712,7 +730,7 @@ function loadSubscriptions() {
             `).join('');
         }, 200);
     }).catch(err => {
-        container.innerHTML = `<div class="empty"><div class="empty-icon">️⚠️</div><p>加载失败: ${UTILS.escape(err.message)}</p></div>`;
+        container.innerHTML = `<div class="empty"><div class="empty-icon">!</div><p>加载失败: ${UTILS.escape(err.message)}</p></div>`;
     });
 }
 
@@ -835,7 +853,7 @@ function loadChannels() {
         if (!channels.length) {
             container.innerHTML = `
                 <div class="empty onboarding">
-                    <div class="empty-icon">📤</div>
+                    <div class="empty-icon">—</div>
                     <h3>推送通道</h3>
                     <p>添加飞书、钉钉、企微、Telegram等推送通道</p>
                     <p>每条通道可以绑定多个订阅规则</p>
@@ -853,8 +871,8 @@ function loadChannels() {
                         <div style="display:flex;align-items:center;gap:6px;">
                             <span class="status-dot ${ch.enabled ? 'on' : 'off'}"></span>
                             <div style="display:flex;gap:4px;">
-                                <button class="btn btn-sm btn-ghost" onclick="editChannel(${ch.id})" title="编辑">✏️</button>
-                                <button class="btn btn-sm btn-ghost btn-danger" onclick="deleteChannel(${ch.id})" title="删除">🗑️</button>
+                                <button class="btn btn-sm btn-ghost" onclick="editChannel(${ch.id})" title="编辑">编辑</button>
+                                <button class="btn btn-sm btn-ghost btn-danger" onclick="deleteChannel(${ch.id})" title="删除">删除</button>
                             </div>
                         </div>
                     </div>
@@ -871,7 +889,7 @@ function loadChannels() {
             `).join('');
         }, 200);
     }).catch(err => {
-        container.innerHTML = `<div class="empty"><div class="empty-icon">️⚠️</div><p>加载失败: ${UTILS.escape(err.message)}</p></div>`;
+        container.innerHTML = `<div class="empty"><div class="empty-icon">!</div><p>加载失败: ${UTILS.escape(err.message)}</p></div>`;
     });
 }
 
@@ -923,12 +941,12 @@ function updateProviderHint() {
     const fieldWechat = document.getElementById('ch-field-wechat');
 
     const hints = {
-        feishu: '💡 飞书群机器人 → 添加机器人 → 复制自定义机器人 Webhook 地址',
-        dingtalk: '💡 钉钉群机器人 → 安全设置 → Webhook → 复制带 access_token 的地址',
-        wecom: '💡 企业微信群 → 添加群机器人 → 复制 key 参数形式的 Webhook 地址',
-        wechat: '💡 通过 WeChatBot RESTful API 发送微信消息',
-        telegram: '💡 Telegram 需要 Bot Token 和 Chat ID，本服务会直接调用 sendMessage API',
-        generic: '💡 任意支持 POST JSON 的 HTTP/HTTPS 端点'
+        feishu: '提示：飞书群机器人 → 添加机器人 → 复制自定义机器人 Webhook 地址',
+        dingtalk: '提示：钉钉群机器人 → 安全设置 → Webhook → 复制带 access_token 的地址',
+        wecom: '提示：企业微信群 → 添加群机器人 → 复制 key 参数形式的 Webhook 地址',
+        wechat: '提示：通过 WeChatBot RESTful API 发送微信消息',
+        telegram: '提示：Telegram 需要 Bot Token 和 Chat ID，本服务会直接调用 sendMessage API',
+        generic: '提示：任意支持 POST JSON 的 HTTP/HTTPS 端点'
     };
 
     const labels = {
@@ -953,7 +971,7 @@ function updateProviderHint() {
         fieldFeishuApp.style.display = '';
         fieldTelegram.style.display = 'none';
         fieldWechat.style.display = 'none';
-        hintEl.textContent = '💡 自建应用机器人：App ID + App Secret 获取 tenant_access_token，再向接收 ID 发送消息';
+        hintEl.textContent = '提示：自建应用机器人：App ID + App Secret 获取 tenant_access_token，再向接收 ID 发送消息';
     } else if (provider === 'feishu') {
         fieldWebhook.style.display = '';
         fieldFeishuApp.style.display = 'none';
@@ -1135,7 +1153,7 @@ function loadLogs() {
         if (!logs.length) {
             container.innerHTML = `
                 <div class="empty onboarding">
-                    <div class="empty-icon">📨</div>
+                    <div class="empty-icon">—</div>
                     <h3>推送日志</h3>
                     <p>查看所有已发生的推送记录</p>
                     <p>包括成功/失败状态、推送时间、错误信息</p>
@@ -1148,7 +1166,7 @@ function loadLogs() {
             container.innerHTML = logs.map(entry => renderLogEntry(entry)).join('');
         }, 200);
     }).catch(err => {
-        container.innerHTML = `<div class="empty"><div class="empty-icon">️⚠️</div><p>加载失败: ${UTILS.escape(err.message)}</p></div>`;
+        container.innerHTML = `<div class="empty"><div class="empty-icon">!</div><p>加载失败: ${UTILS.escape(err.message)}</p></div>`;
     });
 }
 

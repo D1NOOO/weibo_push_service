@@ -39,11 +39,11 @@
             </div>
         </header>
         <nav class="tabs">
-            <button class="tab active" data-tab="hotsearch" title="热搜榜单 (1)">🔥 热搜榜</button>
-            <button class="tab" data-tab="subscriptions" title="订阅规则 (2)">📋 订阅</button>
-            <button class="tab" data-tab="channels" title="推送通道 (3)">📤 通道</button>
-            <button class="tab" data-tab="logs" title="推送日志 (4)">📨 日志</button>
-            <button class="tab" data-tab="config" title="系统配置 (5)">⚙️ 配置</button>
+            <button class="tab active" data-tab="hotsearch" title="热搜榜单 (1)">热搜榜</button>
+            <button class="tab" data-tab="subscriptions" title="订阅规则 (2)">订阅</button>
+            <button class="tab" data-tab="channels" title="推送通道 (3)">通道</button>
+            <button class="tab" data-tab="logs" title="推送日志 (4)">日志</button>
+            <button class="tab" data-tab="config" title="系统配置 (5)">配置</button>
         </nav>
 
         <!-- 热搜榜 -->
@@ -57,39 +57,39 @@
                     </div>
                     <div class="stat-card" title="标签为「爆」的话题数">
                         <div class="stat-value" id="stat-burst">—</div>
-                        <div class="stat-label">🔥 爆款话题</div>
+                        <div class="stat-label">爆款话题</div>
                     </div>
                     <div class="stat-card" title="标签为「新」的新上榜话题">
                         <div class="stat-value" id="stat-new">—</div>
-                        <div class="stat-label">✨ 新上榜</div>
+                        <div class="stat-label">新上榜</div>
                     </div>
                     <div class="stat-card" title="标签为「沸」的话题数">
                         <div class="stat-value" id="stat-ads">—</div>
-                        <div class="stat-label">🔥 沸腾热搜</div>
+                        <div class="stat-label">沸腾热搜</div>
                     </div>
                 </div>
 
                 <div class="chart-container chart-container-label" id="chart-label-container">
-                    <div class="chart-title">📊 标签分布</div>
+                    <div class="chart-title">标签分布</div>
                     <canvas id="chart-labels" height="80"></canvas>
                 </div>
             </div>
 
             <!-- Heat top 10 chart -->
             <div class="chart-container" id="chart-heat-container">
-                <div class="chart-title">🌡️ 热度 TOP 10</div>
+                <div class="chart-title">热度 TOP 10</div>
                 <canvas id="chart-heat" height="160"></canvas>
             </div>
 
             <div class="section-header">
                 <h2 title="微博热搜榜单（定时抓取，非实时更新）">热搜榜单</h2>
                 <div class="header-actions">
-                    <input type="text" id="hotsearch-search" class="search-input" placeholder="🔍 搜索热搜... (⌘K)" title="按关键词过滤热搜列表">
+                    <input type="text" id="hotsearch-search" class="search-input" placeholder="搜索热搜... (⌘K)" title="按关键词过滤热搜列表">
                     <div class="export-group">
-                        <button id="btn-export-csv" class="btn btn-sm btn-ghost" title="导出CSV">📥 CSV</button>
-                        <button id="btn-export-json" class="btn btn-sm btn-ghost" title="导出JSON">📥 JSON</button>
+                        <button id="btn-export-csv" class="btn btn-sm btn-ghost" title="导出CSV">CSV</button>
+                        <button id="btn-export-json" class="btn btn-sm btn-ghost" title="导出JSON">JSON</button>
                     </div>
-                    <button id="btn-trigger" class="btn btn-primary btn-sm" title="立即执行一次刷新数据并检查所有订阅规则进行推送">⚡ 手动触发</button>
+                    <button id="btn-trigger" class="btn btn-primary btn-sm" title="立即执行一次刷新数据并检查所有订阅规则进行推送">手动触发</button>
                 </div>
             </div>
             <div id="hotsearch-list" class="card-list"></div>
@@ -100,7 +100,7 @@
             <div class="section-header">
                 <h2>订阅规则</h2>
                 <div class="header-actions">
-                    <input type="text" id="sub-search" class="search-input" placeholder="🔍 搜索订阅..." title="按名称/关键词过滤订阅列表">
+                    <input type="text" id="sub-search" class="search-input" placeholder="搜索订阅..." title="按名称/关键词过滤订阅列表">
                     <button id="btn-add-sub" class="btn btn-primary btn-sm">+ 新增订阅</button>
                 </div>
             </div>
@@ -114,7 +114,7 @@
                         <input type="text" id="sub-name" required>
                         <label>关键词（逗号分隔，支持 regex: 和 prefix:）</label>
                         <input type="text" id="sub-keywords" placeholder="例如：原神, regex:^某.*, prefix:高考">
-                        <div class="hint-text">💡 普通关键词=包含匹配 | regex:正则表达式 | prefix:前缀匹配</div>
+                        <div class="hint-text">提示：普通关键词=包含匹配 | regex:正则表达式 | prefix:前缀匹配</div>
                         <label>排除关键词（逗号分隔）</label>
                         <input type="text" id="sub-exclude" placeholder="例如：广告">
                         <label>标签过滤（逗号分隔）</label>
@@ -122,7 +122,7 @@
                         <label>最低热度值</label>
                         <input type="number" id="sub-min-hot" value="0" min="0">
                         <label>推送通道</label>
-                        <div class="hint-text">💡 不选则推送到所有通道</div>
+                        <div class="hint-text">提示：不选则推送到所有通道</div>
                         <div id="sub-channel-list" style="margin-bottom:8px;max-height:120px;overflow-y:auto;"></div>
                         <label class="checkbox-label"><input type="checkbox" id="sub-enabled" checked> 启用</label>
                         <div class="modal-actions">
@@ -182,7 +182,7 @@
                                 <option value="user_id">user_id（用户）</option>
                                 <option value="email">email（邮箱）</option>
                             </select>
-                            <div class="hint-text">💡 自建应用需开启机器人能力，并申请发送消息权限；群聊需把机器人加入群</div>
+                            <div class="hint-text">提示：自建应用需开启机器人能力，并申请发送消息权限；群聊需把机器人加入群</div>
                         </div>
                         <!-- Telegram 专属字段 -->
                         <div id="ch-field-telegram" style="display:none;">
@@ -190,7 +190,7 @@
                             <input type="text" id="ch-telegram-token" placeholder="123456789:AAExampleTokenFromBotFather">
                             <label>Chat ID</label>
                             <input type="text" id="ch-telegram-chat" placeholder="-1001234567890 或 @channel_username">
-                            <div class="hint-text">💡 与 @BotFather 创建机器人后，把机器人加入群聊，再填写群聊 Chat ID</div>
+                            <div class="hint-text">提示：与 @BotFather 创建机器人后，把机器人加入群聊，再填写群聊 Chat ID</div>
                         </div>
                         <!-- 微信专属字段 -->
                         <div id="ch-field-wechat" style="display:none;">
@@ -200,9 +200,9 @@
                             <input type="text" id="ch-wechat-token" placeholder="wechatbot-api-test-2026">
                             <label>目标聊天名称</label>
                             <input type="text" id="ch-wechat-chat" placeholder="Feng 或 胖达测试群2026">
-                            <div class="hint-text">💡 多个聊天用逗号分隔，如：Feng,胖达测试群2026</div>
+                            <div class="hint-text">提示：多个聊天用逗号分隔，如：Feng,胖达测试群2026</div>
                         </div>
-                        <div id="ch-provider-hint" class="hint-text">💡 飞书群机器人 → 添加机器人 → 复制 Webhook 地址</div>
+                        <div id="ch-provider-hint" class="hint-text">提示：飞书群机器人 → 添加机器人 → 复制 Webhook 地址</div>
                         <label class="checkbox-label"><input type="checkbox" id="ch-enabled" checked> 启用</label>
                         <div class="modal-actions">
                             <button type="submit" class="btn btn-primary">保存</button>
