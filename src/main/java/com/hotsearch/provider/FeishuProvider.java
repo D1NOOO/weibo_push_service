@@ -25,10 +25,16 @@ public class FeishuProvider implements MessageProvider {
 
     @Override
     public void send(Channel channel, HotSearchItem primaryItem, List<HotSearchItem> allItems) {
+        send(channel, primaryItem, allItems, null, null);
+    }
+
+    @Override
+    public void send(Channel channel, HotSearchItem primaryItem, List<HotSearchItem> allItems,
+                     String target, String messageTitle) {
         Map<String, Object> config = channel.getConfigMap();
         String mode = (String) config.getOrDefault("mode", "webhook");
         if ("app".equals(mode)) {
-            sendViaApp(config, primaryItem, allItems);
+            sendViaApp(config, primaryItem, allItems, messageTitle);
             return;
         }
 
@@ -38,7 +44,7 @@ public class FeishuProvider implements MessageProvider {
         }
 
         try {
-            Map<String, Object> card = buildWebhookCard(primaryItem, allItems);
+            Map<String, Object> card = buildWebhookCard(primaryItem, allItems, messageTitle);
             String json = objectMapper.writeValueAsString(card);
 
             String resp = Jsoup.connect(webhookUrl)
@@ -61,7 +67,8 @@ public class FeishuProvider implements MessageProvider {
         }
     }
 
-    private void sendViaApp(Map<String, Object> config, HotSearchItem primaryItem, List<HotSearchItem> allItems) {
+    private void sendViaApp(Map<String, Object> config, HotSearchItem primaryItem, List<HotSearchItem> allItems,
+                            String messageTitle) {
         String appId = getString(config, "appId", "app_id");
         String appSecret = getString(config, "appSecret", "app_secret");
         String receiveId = getString(config, "receiveId", "token");
@@ -80,7 +87,7 @@ public class FeishuProvider implements MessageProvider {
             Map<String, Object> body = new HashMap<>();
             body.put("receive_id", receiveId);
             body.put("msg_type", "interactive");
-            body.put("content", objectMapper.writeValueAsString(buildCardContent(primaryItem, allItems)));
+            body.put("content", objectMapper.writeValueAsString(buildCardContent(primaryItem, allItems, messageTitle)));
 
             String json = objectMapper.writeValueAsString(body);
             String resp = Jsoup.connect("https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=" + receiveIdType)
@@ -138,17 +145,19 @@ public class FeishuProvider implements MessageProvider {
         return null;
     }
 
-    private Map<String, Object> buildWebhookCard(HotSearchItem primaryItem, List<HotSearchItem> allItems) {
+    private Map<String, Object> buildWebhookCard(HotSearchItem primaryItem, List<HotSearchItem> allItems,
+                                                 String messageTitle) {
         Map<String, Object> card = new HashMap<>();
         card.put("msg_type", "interactive");
-        card.put("card", buildCardContent(primaryItem, allItems));
+        card.put("card", buildCardContent(primaryItem, allItems, messageTitle));
         return card;
     }
 
-    private Map<String, Object> buildCardContent(HotSearchItem primaryItem, List<HotSearchItem> allItems) {
+    private Map<String, Object> buildCardContent(HotSearchItem primaryItem, List<HotSearchItem> allItems,
+                                                String messageTitle) {
         Map<String, Object> cardContent = new HashMap<>();
         cardContent.put("header", Map.of(
-                "title", Map.of("content", "🔥 微博热搜提醒", "tag", "plain_text"),
+                "title", Map.of("content", MessageProvider.normalizeTitle(messageTitle), "tag", "plain_text"),
                 "template", "red"
         ));
 

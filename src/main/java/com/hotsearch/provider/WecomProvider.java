@@ -22,6 +22,12 @@ public class WecomProvider implements MessageProvider {
 
     @Override
     public void send(Channel channel, HotSearchItem primaryItem, List<HotSearchItem> allItems) {
+        send(channel, primaryItem, allItems, null, null);
+    }
+
+    @Override
+    public void send(Channel channel, HotSearchItem primaryItem, List<HotSearchItem> allItems,
+                     String target, String messageTitle) {
         Map<String, Object> config = channel.getConfigMap();
         String webhookUrl = (String) config.get("webhookUrl");
         if (webhookUrl == null || webhookUrl.isBlank()) {
@@ -30,7 +36,7 @@ public class WecomProvider implements MessageProvider {
 
         try {
             StringBuilder md = new StringBuilder();
-            md.append("🔥 **微博热搜提醒**\n\n");
+            md.append("**").append(MessageProvider.normalizeTitle(messageTitle)).append("**\n\n");
             md.append("> **").append(primaryItem.keyword()).append("**");
             if (primaryItem.label() != null) md.append(" [").append(primaryItem.label()).append("]");
             if (primaryItem.hotValue() != null) md.append(" — 热度 ").append(formatHeat(primaryItem.hotValue()));

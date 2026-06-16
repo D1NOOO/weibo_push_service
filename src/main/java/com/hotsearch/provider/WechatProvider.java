@@ -47,6 +47,13 @@ public class WechatProvider implements MessageProvider {
     /** Send to a single specific chat. */
     @Override
     public void send(Channel channel, HotSearchItem primaryItem, List<HotSearchItem> allItems, String target) {
+        send(channel, primaryItem, allItems, target, null);
+    }
+
+    /** Send to a single specific chat with the subscription rule name as title. */
+    @Override
+    public void send(Channel channel, HotSearchItem primaryItem, List<HotSearchItem> allItems,
+                     String target, String messageTitle) {
         Map<String, Object> config = channel.getConfigMap();
         String apiBaseUrl = (String) config.getOrDefault("apiBaseUrl", DEFAULT_BASE_URL);
         String token = (String) config.get("token");
@@ -59,7 +66,7 @@ public class WechatProvider implements MessageProvider {
         }
 
         try {
-            String text = buildMessage(allItems);
+            String text = buildMessage(allItems, messageTitle);
 
             Map<String, Object> body = new HashMap<>();
             body.put("chat", target);
@@ -88,9 +95,9 @@ public class WechatProvider implements MessageProvider {
         }
     }
 
-    private String buildMessage(List<HotSearchItem> allItems) {
+    private String buildMessage(List<HotSearchItem> allItems, String messageTitle) {
         StringBuilder text = new StringBuilder();
-        text.append("💥微博热搜💥\n\n");
+        text.append(MessageProvider.normalizeTitle(messageTitle)).append("\n\n");
 
         for (int i = 0; i < allItems.size(); i++) {
             HotSearchItem item = allItems.get(i);

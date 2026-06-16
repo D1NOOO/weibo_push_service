@@ -184,14 +184,14 @@ public class PipelineService {
                     String batchId = UUID.randomUUID().toString();
 
                     try {
-                        provider.send(channel, primaryItem, allItems, target);
+                        provider.send(channel, primaryItem, allItems, target, sub.getName());
                         for (MatchResult m : toDeliver) {
                             deliveryService.save(buildLog(m, channel, target, "SUCCESS", null, batchId));
                         }
                     } catch (Exception e) {
                         log.error("推送失败: subId={}, channel={}, target={}", sub.getId(), channel.getId(), target, e);
                         if (isRateLimited(e)) {
-                            if (retryWithBackoff(provider, channel, primaryItem, allItems, target)) {
+                            if (retryWithBackoff(provider, channel, primaryItem, allItems, target, sub.getName())) {
                                 log.info("退避重试成功: keyword={}, channel={}", primaryItem.keyword(), channel.getId());
                                 for (MatchResult m : toDeliver) {
                                     deliveryService.save(buildLog(m, channel, target, "SUCCESS", null, batchId));
@@ -232,7 +232,7 @@ public class PipelineService {
 
     private boolean retryWithBackoff(MessageProvider provider, Channel channel,
                                       HotSearchItem primaryItem, List<HotSearchItem> allItems,
-                                      String target) {
+                                      String target, String messageTitle) {
         int maxRetries = 3;
         int delaySeconds = 12;
         for (int i = 0; i < maxRetries; i++) {
@@ -240,7 +240,7 @@ public class PipelineService {
                 log.info("退避重试 {}/{}: {}秒后重试 channel={} keyword={}",
                         i + 1, maxRetries, delaySeconds, channel.getId(), primaryItem.keyword());
                 Thread.sleep(delaySeconds * 1000L);
-                provider.send(channel, primaryItem, allItems, target);
+                provider.send(channel, primaryItem, allItems, target, messageTitle);
                 return true;
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
