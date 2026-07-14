@@ -10,13 +10,8 @@ import com.hotsearch.matcher.SubscriptionMatcher.MatchResult;
 import com.hotsearch.provider.MessageProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.PostConstruct;
-import java.io.*;
-import java.nio.file.*;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -36,66 +31,21 @@ public class PipelineService {
     private final SubscriptionMatcher matcher;
     private final DeliveryService deliveryService;
     private final Map<String, MessageProvider> providerMap;
+    private final ApplicationConfigService configService;
+    private final SinkShortLinkService sinkShortLinkService;
 
-    private static final String CONFIG_FILE = "data/dedupe-config.properties";
-
-    @Value("${app.dedupe.window-hours:6}")
-    private volatile int dedupeWindowHours;
-
-    public int getDedupeWindowHours() { return dedupeWindowHours; }
+    public int getDedupeWindowHours() { return configService.getDedupeWindowHours(); }
 
     public void setDedupeWindowHours(int hours) {
-        this.dedupeWindowHours = hours;
-        persistDedupeWindowHours(hours);
-    }
-
-    @PostConstruct
-    private void loadPersistedConfig() {
-        try {
-            Path path = Paths.get(CONFIG_FILE);
-            if (Files.exists(path)) {
-                Properties props = new Properties();
-                try (InputStream in = Files.newInputStream(path)) {
-                    props.load(in);
-                }
-                String val = props.getProperty("dedupe.window-hours");
-                if (val != null) {
-                    int persisted = Integer.parseInt(val);
-                    if (persisted >= 1 && persisted <= 168) {
-                        this.dedupeWindowHours = persisted;
-                        log.info("从持久化配置加载去重窗口: {} 小时", persisted);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.warn("加载持久化配置失败，使用默认值: {} 小时", dedupeWindowHours, e);
-        }
-    }
-
-    private void persistDedupeWindowHours(int hours) {
-        try {
-            Path path = Paths.get(CONFIG_FILE);
-            Files.createDirectories(path.getParent());
-            Properties props = new Properties();
-            // Load existing props first in case we add more later
-            if (Files.exists(path)) {
-                try (InputStream in = Files.newInputStream(path)) {
-                    props.load(in);
-                }
-            }
-            props.setProperty("dedupe.window-hours", String.valueOf(hours));
-            try (OutputStream out = Files.newOutputStream(path)) {
-                props.store(out, "Dedupe config - persists across restarts");
-            }
-        } catch (Exception e) {
-            log.error("持久化去重配置失败", e);
-        }
+        configService.setDedupeWindowHours(hours);
     }
 
     public PipelineService(WeiboFetcher weiboFetcher, HotSearchService hotSearchService,
                            SubscriptionService subscriptionService, ChannelService channelService,
                            SubscriptionMatcher matcher, DeliveryService deliveryService,
-                           Map<String, MessageProvider> providerMap) {
+                           Map<String, MessageProvider> providerMap,
+                           ApplicationConfigService configService,
+                           SinkShortLinkService sinkShortLinkService) {
         this.weiboFetcher = weiboFetcher;
         this.hotSearchService = hotSearchService;
         this.subscriptionService = subscriptionService;
@@ -103,9 +53,10 @@ public class PipelineService {
         this.matcher = matcher;
         this.deliveryService = deliveryService;
         this.providerMap = providerMap;
+        this.configService = configService;
+        this.sinkShortLinkService = sinkShortLinkService;
     }
 
-    @Scheduled(cron = "${app.schedule.cron:0 0 * * * *}")
     public void scheduledRun() {
         log.info("定时任务触发：开始执行热搜推送管线");
         runPipeline();
@@ -141,7 +92,7 @@ public class PipelineService {
 
         // 3. Group by subscription, dedupe, then deliver one message per sub-channel
         List<Channel> channels = channelService.listAllEnabled();
-        LocalDateTime dedupeSince = LocalDateTime.now().minusHours(dedupeWindowHours);
+        LocalDateTime dedupeSince = LocalDateTime.now().minusHours(configService.getDedupeWindowHours());
 
         Map<Long, List<MatchResult>> matchesBySub = matches.stream()
                 .collect(Collectors.groupingBy(m -> m.subscription().getId(), LinkedHashMap::new, Collectors.toList()));
@@ -179,8 +130,9 @@ public class PipelineService {
                     }
                     if (toDeliver.isEmpty()) continue;
 
-                    List<HotSearchItem> allItems = toDeliver.stream().map(MatchResult::item).toList();
-                    HotSearchItem primaryItem = toDeliver.get(0).item();
+                    List<HotSearchItem> originalItems = toDeliver.stream().map(MatchResult::item).toList();
+                    List<HotSearchItem> allItems = sinkShortLinkService.shortenItems(channel, originalItems);
+                    HotSearchItem primaryItem = allItems.get(0);
                     String batchId = UUID.randomUUID().toString();
 
                     try {

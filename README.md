@@ -61,7 +61,7 @@ mvn spring-boot:run
 ```yaml
 app:
   schedule:
-    cron: "0 0 * * * *"     # 抓取频率（默认每小时整点）
+    interval-minutes: 10      # 默认抓取频率，可在系统配置页面动态修改
   dedupe:
     window-hours: 6          # 去重窗口（小时内同一关键词不重复推送）
   fetcher:
@@ -90,8 +90,19 @@ app:
 | 飞书自建应用 | `mode=app` + `appId` + `appSecret` + `receiveId` + `receiveIdType` — 通过飞书应用机器人发送消息 |
 | 钉钉 | `webhookUrl` — 钉钉机器人 Webhook 地址 |
 | 企业微信 | `webhookUrl` — 企微机器人 Webhook 地址 |
+| 微信机器人 | `apiBaseUrl` + `token` + `chat`；可选 `shortLinkEnabled` |
 | Telegram | `token` + `chatId` — Bot Token 和 Chat ID |
 | 通用 Webhook | `webhookUrl` — 任意 HTTP POST 端点 |
+
+### 全局 Sink 短链
+
+推荐将 [Sink](https://github.com/miantiao-me/Sink) 作为独立服务部署到 Cloudflare Workers，而不是把其源码集成进本项目。这样 Sink 的 KV、分析能力和发布周期与热搜服务解耦，本项目只通过服务端调用 `POST /api/link/create`。
+
+1. 按 Sink 文档部署 Workers、绑定自定义域名，并配置 `NUXT_SITE_TOKEN`。
+2. 在“系统配置 → Sink 短链服务”填写 `Sink Base URL`（例如 `https://s.20778888.xyz`）和与 `NUXT_SITE_TOKEN` 相同的 `Sink Site Token`。
+3. 编辑任意推送通道，勾选“使用 Sink 短链接”。飞书、钉钉、企业微信、微信机器人、Telegram 和通用 Webhook 均支持。
+
+仅当通道开关启用且全局 Sink 配置完整时才会缩短微博 URL。Sink 不可用或返回异常时，本次推送自动保留原始长链接，消息不会因短链服务故障而中断。旧版保存在微信通道中的 Sink 凭据会在启动时自动迁移到全局配置。
 
 ## Roadmap
 

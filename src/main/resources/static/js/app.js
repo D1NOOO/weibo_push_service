@@ -78,6 +78,9 @@ class AppState {
     constructor() {
         this.config = { dedupeHours: 6 };
         this.allItems = [];
+        this.hotSearchFetchedAt = null;
+        this.hotSearchCache = { data: null, loadedAt: 0 };
+        this.channelsCache = { data: null, loadedAt: 0 };
         this.theme = localStorage.getItem('theme') || 'light';
         this.currentTab = 'hotsearch';
         this.autoRefresh = null;
@@ -102,7 +105,7 @@ class AppState {
         if (this.autoRefresh) return;
         this.autoRefresh = setInterval(() => {
             if (document.getElementById('tab-hotsearch').classList.contains('active')) {
-                loadHotSearch();
+                loadHotSearch({ force: true, showSkeleton: false });
             }
         }, 30000); // 30 seconds
     }
@@ -125,8 +128,47 @@ const UTILS = {
         div.textContent = s; 
         return div.innerHTML; 
     },
-    splitList(s) { 
-        return s ? s.split(/[,，]/).map(x => x.trim()).filter(Boolean) : []; 
+    splitList(s) {
+        if (!s) return [];
+        const parts = [];
+        let current = '';
+        let escapeNext = false;
+        let parenDepth = 0;
+        let bracketDepth = 0;
+        let braceDepth = 0;
+
+        for (const ch of s) {
+            if (escapeNext) {
+                current += ch;
+                escapeNext = false;
+                continue;
+            }
+
+            if (ch === '\\') {
+                current += ch;
+                escapeNext = true;
+                continue;
+            }
+
+            if (ch === '(') parenDepth++;
+            else if (ch === ')' && parenDepth > 0) parenDepth--;
+            else if (ch === '[') bracketDepth++;
+            else if (ch === ']' && bracketDepth > 0) bracketDepth--;
+            else if (ch === '{') braceDepth++;
+            else if (ch === '}' && braceDepth > 0) braceDepth--;
+
+            if ((ch === ',' || ch === '，') && parenDepth === 0 && bracketDepth === 0 && braceDepth === 0) {
+                const value = current.trim();
+                if (value) parts.push(value);
+                current = '';
+            } else {
+                current += ch;
+            }
+        }
+
+        const value = current.trim();
+        if (value) parts.push(value);
+        return parts;
     },
     formatNum(n) { 
         if (n >= 100000) return (n / 10000).toFixed(1) + '万';
@@ -299,6 +341,17 @@ const ChartManager = {
     }
 };
 
+window.addEventListener('chartjs-ready', () => {
+    if (ChartManager.labelChart || document.getElementById('dashboard-page').classList.contains('hidden')) {
+        return;
+    }
+    try {
+        ChartManager.initCharts();
+        if (State.allItems.length) updateCharts(State.allItems);
+    } catch (e) {
+        console.warn('Chart initialization failed:', e);
+    }
+});
 // ==================== Authentication ====================
 // Login
 document.getElementById('login-form').addEventListener('submit', async (e) => {
@@ -406,54 +459,69 @@ function loadTab(tab) {
 }
 
 // ==================== Hot Search Main Logic ====================
-async function loadHotSearch() {
+async function getHotSearchResult(force = false) {
+    const cacheTtlMs = 30000;
+    const now = Date.now();
+    if (!force && State.hotSearchCache.data && (now - State.hotSearchCache.loadedAt) < cacheTtlMs) {
+        return State.hotSearchCache.data;
+    }
+
+    const result = await API.get('/api/hotsearch');
+    State.hotSearchCache = { data: result, loadedAt: now };
+    return result;
+}
+
+function renderHotSearch(result = null) {
     const container = document.getElementById('hotsearch-list');
-    UTILS.showLoading(container);
-    
+    let items = result ? (Array.isArray(result) ? result : (result.items || [])) : State.allItems;
+    const fetchedAt = result ? (result.fetchedAt || null) : State.hotSearchFetchedAt;
+
+    items = items.filter(item => item.keyword);
+    State.allItems = items;
+    State.hotSearchFetchedAt = fetchedAt;
+
+    if (!items.length) {
+        container.innerHTML = '<div class="empty"><div class="empty-icon">😔</div><p>暂无热搜数据</p></div>';
+        return;
+    }
+
+    updateStats(items);
+    updateCharts(items);
+
+    const search = document.getElementById('hotsearch-search').value.toLowerCase().trim();
+    const filteredItems = search
+        ? items.filter(item => item.keyword && item.keyword.toLowerCase().includes(search))
+        : items;
+
+    if (!filteredItems.length) {
+        container.innerHTML = `<div class="empty"><div class="empty-icon">—</div><p>未找到匹配 "${UTILS.escape(search)}" 的热搜</p></div>`;
+        return;
+    }
+
+    container.innerHTML = filteredItems.map((item, i) => renderHotItem(item, i)).join('');
+
+    if (fetchedAt && document.querySelector('.freshness-banner')) {
+        document.querySelector('.freshness-banner .freshness-time').textContent = UTILS.formatTime(fetchedAt);
+    }
+}
+
+async function loadHotSearch(options = {}) {
+    const container = document.getElementById('hotsearch-list');
+    const force = options.force === true;
+    const showSkeleton = options.showSkeleton !== false;
+
+    if (showSkeleton && !State.allItems.length) {
+        UTILS.showLoading(container);
+    }
+
     try {
-        const result = await API.get('/api/hotsearch');
-        let items = Array.isArray(result) ? result : (result.items || []);
-        const fetchedAt = result.fetchedAt || null;
-        // Filter out items without keywords (e.g. topic headers from Weibo API)
-        items = items.filter(item => item.keyword);
-        State.allItems = items;
-        
-        if (!items.length) {
-            container.innerHTML = '<div class="empty"><div class="empty-icon">😴</div><p>暂无热搜数据</p></div>';
-            return;
-        }
-        
-        // Update stats
-        updateStats(items);
-        // Update charts
-        updateCharts(items);
-        
-        // Get search filter
-        const search = document.getElementById('hotsearch-search').value.toLowerCase().trim();
-        const filteredItems = search 
-            ? items.filter(item => item.keyword && item.keyword.toLowerCase().includes(search))
-            : items;
-        
-        if (!filteredItems.length) {
-            container.innerHTML = `<div class="empty"><div class="empty-icon">—</div><p>未找到匹配 "${search}" 的热搜</p></div>`;
-            return;
-        }
-        
-        // Render list with skeleton removal animation
-        setTimeout(() => {
-            container.innerHTML = filteredItems.map((item, i) => renderHotItem(item, i)).join('');
-        }, 200);
-        
-        // Show freshness banner
-        if (fetchedAt && document.querySelector('.freshness-banner')) {
-            document.querySelector('.freshness-banner .freshness-time').textContent = UTILS.formatTime(fetchedAt);
-        }
+        const result = await getHotSearchResult(force);
+        renderHotSearch(result);
     } catch (e) {
         container.innerHTML = '<div class="empty"><div class="empty-icon">!</div><p>加载失败: ' + UTILS.escape(e.message) + '</p></div>';
         UTILS.showToast('热搜加载失败', 'error');
     }
 }
-
 function renderHotItem(item, i) {
     const rank = item.rank || i + 1;
     return `
@@ -527,8 +595,9 @@ function updateCharts(items) {
 
 // Search
 document.getElementById('hotsearch-search').addEventListener('input', debounce(() => {
-    loadHotSearch();
-}, 300));
+    if (State.allItems.length) renderHotSearch();
+    else loadHotSearch({ showSkeleton: false });
+}, 150));
 
 // Trigger
 document.getElementById('btn-trigger').addEventListener('click', async () => {
@@ -536,7 +605,7 @@ document.getElementById('btn-trigger').addEventListener('click', async () => {
         await API.post('/api/hotsearch/trigger', {});
         UTILS.showToast('推送管线已触发，即将刷新数据...', 'success');
         setTimeout(() => {
-            loadHotSearch();
+            loadHotSearch({ force: true });
             loadLogs();
         }, 3000);
     } catch (e) { UTILS.showToast(e.message, 'error'); }
@@ -631,29 +700,82 @@ async function loadConfig() {
     try {
         const config = await API.get('/api/config');
         const currentHours = config.dedupeWindowHours || 6;
+        const currentInterval = config.fetchIntervalMinutes || 10;
         document.getElementById('current-dedupe-hours').textContent = currentHours;
         document.getElementById('dedupe-hours').value = currentHours;
-        document.getElementById('btn-save-config').disabled = true;
+        document.getElementById('btn-save-dedupe-config').disabled = true;
+        document.getElementById('fetch-interval-minutes').value = currentInterval;
+        document.getElementById('current-fetch-interval').textContent = currentInterval;
+        document.getElementById('btn-save-fetch-config').disabled = true;
+        document.getElementById('sink-base-url').value = config.sinkBaseUrl || '';
+        document.getElementById('sink-site-token').value = config.sinkToken || '';
+        State.config = config;
 
         document.getElementById('dedupe-hours').onchange = () => {
             const newVal = document.getElementById('dedupe-hours').value;
-            document.getElementById('btn-save-config').disabled = (parseInt(newVal) === currentHours);
+            document.getElementById('btn-save-dedupe-config').disabled = (parseInt(newVal) === currentHours);
+        };
+        document.getElementById('fetch-interval-minutes').oninput = () => {
+            const newVal = parseInt(document.getElementById('fetch-interval-minutes').value);
+            document.getElementById('btn-save-fetch-config').disabled = (newVal === currentInterval);
         };
     } catch (e) { console.warn('加载配置失败:', e.message); }
 }
 
-document.getElementById('btn-save-config').addEventListener('click', async () => {
+document.getElementById('btn-save-dedupe-config').addEventListener('click', async () => {
     const hours = parseInt(document.getElementById('dedupe-hours').value);
     try {
         await API.put('/api/config', { dedupeWindowHours: hours });
         document.getElementById('current-dedupe-hours').textContent = hours;
-        document.getElementById('btn-save-config').disabled = true;
+        document.getElementById('btn-save-dedupe-config').disabled = true;
         UTILS.showToast(`去重窗口已更新为 ${hours} 小时`, 'success');
     } catch (err) {
         UTILS.showToast('保存失败: ' + err.message, 'error');
     }
 });
 
+document.getElementById('btn-save-fetch-config').addEventListener('click', async () => {
+    const minutes = parseInt(document.getElementById('fetch-interval-minutes').value);
+    try {
+        await API.put('/api/config', { fetchIntervalMinutes: minutes });
+        document.getElementById('current-fetch-interval').textContent = minutes;
+        document.getElementById('btn-save-fetch-config').disabled = true;
+        UTILS.showToast(`数据抓取频率已更新为 ${minutes} 分钟/次`, 'success');
+    } catch (err) {
+        UTILS.showToast('保存失败: ' + err.message, 'error');
+    }
+});
+
+document.getElementById('btn-save-sink-config').addEventListener('click', async () => {
+    const sinkBaseUrl = document.getElementById('sink-base-url').value.trim();
+    const sinkToken = document.getElementById('sink-site-token').value.trim();
+    try {
+        const config = await API.put('/api/config', { sinkBaseUrl, sinkToken });
+        document.getElementById('sink-base-url').value = config.sinkBaseUrl || '';
+        document.getElementById('sink-site-token').value = config.sinkToken || '';
+        State.config = config;
+        UTILS.showToast(config.sinkConfigured ? 'Sink 短链服务配置已保存' : 'Sink 短链服务配置已清除', 'success');
+    } catch (err) {
+        UTILS.showToast('保存失败: ' + err.message, 'error');
+    }
+});
+
+// ==================== Cached Data Helpers ====================
+async function getChannels(force = false) {
+    const cacheTtlMs = 30000;
+    const now = Date.now();
+    if (!force && State.channelsCache.data && (now - State.channelsCache.loadedAt) < cacheTtlMs) {
+        return State.channelsCache.data;
+    }
+
+    const channels = await API.get('/api/channels');
+    State.channelsCache = { data: channels, loadedAt: now };
+    return channels;
+}
+
+function invalidateChannelsCache() {
+    State.channelsCache = { data: null, loadedAt: 0 };
+}
 // ==================== Subscription Functions ====================
 let editingSubscriptionId = null;
 
@@ -757,7 +879,7 @@ function showSubscriptionModal(subscription = null) {
     }
 
     // Load channels for checkbox selection
-    API.get('/api/channels').then(channels => {
+    getChannels().then(channels => {
         const container = document.getElementById('sub-channel-list');
         const selectedIds = subscription?.channelIds || [];
         if (channels.length) {
@@ -849,7 +971,7 @@ function loadChannels() {
     
     UTILS.showLoading(container);
     
-    API.get('/api/channels').then(channels => {
+    getChannels().then(channels => {
         if (!channels.length) {
             container.innerHTML = `
                 <div class="empty onboarding">
@@ -916,16 +1038,17 @@ function maskWebhookUrl(url) {
 
 function describeChannelConfig(ch) {
     const config = ch.config || {};
+    const shortLink = config.shortLinkEnabled ? ' · 短链: 已启用' : '';
     if (ch.provider === 'wechat') {
-        return `目标聊天: ${UTILS.escape(config.chat || '未配置')} · API: ${UTILS.escape(config.apiBaseUrl || 'http://localhost:5001')}`;
+        return `目标聊天: ${UTILS.escape(config.chat || '未配置')} · API: ${UTILS.escape(config.apiBaseUrl || 'http://localhost:5001')}${shortLink}`;
     }
     if (ch.provider === 'feishu' && config.mode === 'app') {
-        return `自建应用: ${UTILS.escape(config.appId || '未配置')} · 接收: ${UTILS.escape(config.receiveId || config.token || '未配置')}`;
+        return `自建应用: ${UTILS.escape(config.appId || '未配置')} · 接收: ${UTILS.escape(config.receiveId || config.token || '未配置')}${shortLink}`;
     }
     if (ch.provider === 'telegram') {
-        return `Bot Token: ${UTILS.escape(config.token || '未配置')} · Chat ID: ${UTILS.escape(config.chatId || '未配置')}`;
+        return `Bot Token: ${UTILS.escape(config.token || '未配置')} · Chat ID: ${UTILS.escape(config.chatId || '未配置')}${shortLink}`;
     }
-    return `Webhook: ${maskWebhookUrl(config.webhookUrl || config.webhook_url || '')}`;
+    return `Webhook: ${maskWebhookUrl(config.webhookUrl || config.webhook_url || '')}${shortLink}`;
 }
 
 function updateProviderHint() {
@@ -1002,12 +1125,14 @@ function updateProviderHint() {
         urlLabel.textContent = labels[provider] || '配置';
         webhookInput.placeholder = placeholders[provider] || placeholders.generic;
     }
+
 }
 
 function showChannelModal(channel = null) {
     editingChannelId = channel?.id || null;
     const modal = document.getElementById('ch-modal');
     const title = document.getElementById('ch-modal-title');
+    document.getElementById('ch-shortlink-enabled').checked = false;
     
     title.textContent = channel ? '编辑通道' : '新增通道';
     
@@ -1032,6 +1157,7 @@ function showChannelModal(channel = null) {
         } else {
             document.getElementById('ch-webhook').value = channel.config?.webhookUrl || channel.config?.webhook_url || '';
         }
+        document.getElementById('ch-shortlink-enabled').checked = channel.config?.shortLinkEnabled === true;
         document.getElementById('ch-enabled').checked = channel.enabled !== false;
     } else {
         document.getElementById('ch-form').reset();
@@ -1049,6 +1175,11 @@ document.getElementById('btn-add-ch').addEventListener('click', () => showChanne
 
 document.getElementById('ch-provider').addEventListener('change', updateProviderHint);
 document.getElementById('ch-feishu-mode').addEventListener('change', updateProviderHint);
+document.getElementById('btn-open-sink-config').addEventListener('click', () => {
+    hideModal('ch-modal');
+    document.querySelector('.tab[data-tab="config"]').click();
+    setTimeout(() => document.getElementById('sink-config-card').scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+});
 
 document.getElementById('ch-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -1089,6 +1220,8 @@ document.getElementById('ch-form').addEventListener('submit', async (e) => {
         config = { webhookUrl: webhook };
     }
 
+    config.shortLinkEnabled = document.getElementById('ch-shortlink-enabled').checked;
+
     const channel = { provider, config, enabled };
     
     const id = document.getElementById('ch-id').value;
@@ -1102,6 +1235,7 @@ document.getElementById('ch-form').addEventListener('submit', async (e) => {
             UTILS.showToast('通道创建成功', 'success');
         }
         hideModal('ch-modal');
+        invalidateChannelsCache();
         loadChannels();
     } catch (err) {
         UTILS.showToast(err.message, 'error');
@@ -1121,6 +1255,7 @@ function editChannel(id) {
 function toggleChannel(id, enabled) {
     API.patch(`/api/channels/${id}/enabled`, { enabled }).then(() => {
         UTILS.showToast(`通道已${enabled ? '启用' : '禁用'}`, 'success');
+        invalidateChannelsCache();
         loadChannels();
     }).catch(err => UTILS.showToast(err.message, 'error'));
 }
@@ -1130,6 +1265,7 @@ function deleteChannel(id) {
     
     API.delete(`/api/channels/${id}`).then(() => {
         UTILS.showToast('通道删除成功', 'success');
+        invalidateChannelsCache();
         loadChannels();
     }).catch(err => UTILS.showToast(err.message, 'error'));
 }
@@ -1308,7 +1444,7 @@ setTimeout(() => {
             <div class="freshness-banner">
                 <div class="freshness-title">🎯 数据时效性说明</div>
                 <p>数据为定时抓取快照，非实时更新。最近更新：<span class="freshness-time">—</span></p>
-                <p style="font-size:11px;color:var(--text-light);margin-top:4px;">系统每小时自动获取微博热搜榜最新数据</p>
+                <p style="font-size:11px;color:var(--text-light);margin-top:4px;">系统按“系统配置”中的抓取频率自动获取微博热搜榜最新数据</p>
             </div>
         `);
     }

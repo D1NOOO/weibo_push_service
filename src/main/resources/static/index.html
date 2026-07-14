@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>微博热搜监控</title>
     <link rel="stylesheet" href="/css/style.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <script async src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" onload="window.dispatchEvent(new Event('chartjs-ready'))"></script>
 </head>
 <body>
     <!-- 登录页 -->
@@ -203,6 +203,11 @@
                             <div class="hint-text">提示：多个聊天用逗号分隔，如：Feng,胖达测试群2026</div>
                         </div>
                         <div id="ch-provider-hint" class="hint-text">提示：飞书群机器人 → 添加机器人 → 复制 Webhook 地址</div>
+                        <div style="margin-top:12px;padding:12px;border:1px solid var(--border);border-radius:8px;">
+                            <label class="checkbox-label" style="margin:0;"><input type="checkbox" id="ch-shortlink-enabled"> 使用 Sink 短链接</label>
+                            <div class="hint-text" style="margin-top:6px;">启用后，此通道消息中的热搜链接会使用系统配置的 Sink 服务。</div>
+                            <button type="button" id="btn-open-sink-config" class="btn btn-sm" style="margin-top:8px;">前往配置短链服务</button>
+                        </div>
                         <label class="checkbox-label"><input type="checkbox" id="ch-enabled" checked> 启用</label>
                         <div class="modal-actions">
                             <button type="submit" class="btn btn-primary">保存</button>
@@ -254,14 +259,37 @@
                             <option value="22">22 小时</option>
                             <option value="24">24 小时</option>
                         </select>
-                        <button id="btn-save-config" class="btn btn-sm btn-primary" disabled>保存配置</button>
+                        <button id="btn-save-dedupe-config" class="btn btn-sm btn-primary" disabled>保存去重配置</button>
                     </div>
                     <div class="hint-text" style="margin-top: 8px;">修改即时生效，重启后保持</div>
                 </div>
                 <div class="config-card">
+                    <h3>数据抓取频率</h3>
+                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.6;">
+                        设置系统自动抓取微博热搜并执行推送管线的间隔，修改后从下一次调度开始生效。
+                    </p>
+                    <div class="config-row">
+                        <input type="number" id="fetch-interval-minutes" min="1" max="1440" value="10" style="flex:1;max-width:150px;">
+                        <span>分钟/次</span>
+                        <button id="btn-save-fetch-config" class="btn btn-sm btn-primary" disabled>保存抓取频率</button>
+                    </div>
+                </div>
+                <div class="config-card" id="sink-config-card">
+                    <h3>Sink 短链服务</h3>
+                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.6;">
+                        在此统一配置 Sink。配置完成后，可在任意推送通道中勾选“使用 Sink 短链接”。
+                    </p>
+                    <label>Sink Base URL</label>
+                    <input type="url" id="sink-base-url" placeholder="https://s.20778888.xyz">
+                    <label>Sink Site Token</label>
+                    <input type="password" id="sink-site-token" placeholder="NUXT_SITE_TOKEN" autocomplete="new-password">
+                    <div class="hint-text">Token 仅保存在服务端；页面重新加载时只显示掩码。</div>
+                    <button id="btn-save-sink-config" class="btn btn-sm btn-primary" style="margin-top:12px;">保存短链配置</button>
+                </div>
+                <div class="config-card">
                     <h3>应用信息</h3>
                     <div style="font-size: 13px; line-height: 1.8;">
-                        <p><strong>数据抓取</strong>：10 分钟/次（定时任务）</p>
+                        <p><strong>数据抓取</strong>：<span id="current-fetch-interval">10</span> 分钟/次（可配置）</p>
                         <p><strong>消息通道</strong>：飞书 · 钉钉 · 企微 · 微信 · Telegram · Webhook</p>
                         <p><strong>匹配模式</strong>：包含 · 前缀 · 正则</p>
                         <p><strong>数据时效</strong>：抓取快照，非实时</p>
@@ -304,6 +332,6 @@
     </div>
 
     <div id="toast" class="toast hidden"></div>
-    <script src="/js/app.js"></script>
+    <script defer src="/js/app.js"></script>
 </body>
 </html>

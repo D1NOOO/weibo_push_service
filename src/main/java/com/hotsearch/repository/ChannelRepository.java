@@ -7,4 +7,5 @@ import java.util.List;
 public interface ChannelRepository extends JpaRepository<Channel, Long> {
     List<Channel> findByUserId(Long userId);
     List<Channel> findByEnabledTrue();
+    long countByUserIdAndIdIn(Long userId, List<Long> ids);
 }

@@ -16,7 +16,6 @@ public class WechatProvider implements MessageProvider {
     private static final Logger log = LoggerFactory.getLogger(WechatProvider.class);
     private static final String DEFAULT_BASE_URL = "http://localhost:5001";
     private final ObjectMapper objectMapper;
-
     public WechatProvider(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
     }
@@ -73,11 +72,12 @@ public class WechatProvider implements MessageProvider {
             body.put("message", text);
 
             String json = objectMapper.writeValueAsString(body);
-            String url = apiBaseUrl.replaceAll("/$", "") + "/api/send/message?token=" + token;
+            String url = apiBaseUrl.replaceAll("/$", "") + "/api/send/message";
 
             String resp = Jsoup.connect(url)
                     .requestBody(json)
                     .header("Content-Type", "application/json")
+                    .header("Authorization", "Bearer " + token)
                     .ignoreContentType(true)
                     .post()
                     .body().text();
@@ -95,7 +95,7 @@ public class WechatProvider implements MessageProvider {
         }
     }
 
-    private String buildMessage(List<HotSearchItem> allItems, String messageTitle) {
+    String buildMessage(List<HotSearchItem> allItems, String messageTitle) {
         StringBuilder text = new StringBuilder();
         text.append(MessageProvider.normalizeTitle(messageTitle)).append("\n\n");
 

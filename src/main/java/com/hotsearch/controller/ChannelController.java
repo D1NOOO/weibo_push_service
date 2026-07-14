@@ -7,6 +7,7 @@ import com.hotsearch.dto.HotSearchItem;
 import com.hotsearch.entity.Channel;
 import com.hotsearch.provider.MessageProvider;
 import com.hotsearch.service.ChannelService;
+import com.hotsearch.service.SinkShortLinkService;
 import com.hotsearch.util.JwtUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,12 +26,15 @@ public class ChannelController {
     private final ChannelService channelService;
     private final JwtUtil jwtUtil;
     private final Map<String, MessageProvider> providerMap;
+    private final SinkShortLinkService sinkShortLinkService;
 
     public ChannelController(ChannelService channelService, JwtUtil jwtUtil,
-                             Map<String, MessageProvider> providerMap) {
+                             Map<String, MessageProvider> providerMap,
+                             SinkShortLinkService sinkShortLinkService) {
         this.channelService = channelService;
         this.jwtUtil = jwtUtil;
         this.providerMap = providerMap;
+        this.sinkShortLinkService = sinkShortLinkService;
     }
 
     private Long getUserId(String authHeader) {
@@ -102,9 +106,9 @@ public class ChannelController {
         HotSearchItem testItem = new HotSearchItem(
                 1, "测试热搜", "热", 99999L, false,
                 "https://s.weibo.com/weibo?q=测试热搜");
-        List<HotSearchItem> allItems = List.of(testItem);
+        List<HotSearchItem> allItems = sinkShortLinkService.shortenItems(ch, List.of(testItem));
 
-        provider.send(ch, testItem, allItems);
+        provider.send(ch, allItems.get(0), allItems);
         return ResponseEntity.ok(Map.of("message", "测试消息发送成功"));
     }
 }

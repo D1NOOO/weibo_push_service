@@ -3,10 +3,13 @@ package com.hotsearch.service;
 import com.hotsearch.dto.ChannelRequest;
 import com.hotsearch.dto.ChannelResponse;
 import com.hotsearch.entity.Channel;
+import com.hotsearch.entity.Subscription;
 import com.hotsearch.repository.ChannelRepository;
+import com.hotsearch.repository.SubscriptionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,9 +19,11 @@ import java.util.Set;
 public class ChannelService {
 
     private final ChannelRepository channelRepository;
+    private final SubscriptionRepository subscriptionRepository;
 
-    public ChannelService(ChannelRepository channelRepository) {
+    public ChannelService(ChannelRepository channelRepository, SubscriptionRepository subscriptionRepository) {
         this.channelRepository = channelRepository;
+        this.subscriptionRepository = subscriptionRepository;
     }
 
     public List<ChannelResponse> listByUser(Long userId) {
@@ -30,7 +35,7 @@ public class ChannelService {
         Channel ch = new Channel();
         ch.setUserId(userId);
         ch.setProvider(req.provider());
-        ch.setConfigMap(req.config() != null ? req.config() : java.util.Map.of());
+        ch.setConfigMap(sanitizeConfig(req.config()));
         ch.setEnabled(req.enabled() != null ? req.enabled() : true);
         return toResponse(channelRepository.save(ch));
     }
@@ -41,7 +46,7 @@ public class ChannelService {
                 .filter(c -> c.getUserId().equals(userId))
                 .orElseThrow(() -> new RuntimeException("通道不存在"));
         ch.setProvider(req.provider());
-        ch.setConfigMap(mergeConfig(ch.getConfigMap(), req.config()));
+        ch.setConfigMap(mergeConfig(ch.getConfigMap(), sanitizeConfig(req.config())));
         ch.setEnabled(req.enabled());
         return toResponse(channelRepository.save(ch));
     }
@@ -73,9 +78,20 @@ public class ChannelService {
         Channel ch = channelRepository.findById(id)
                 .filter(c -> c.getUserId().equals(userId))
                 .orElseThrow(() -> new RuntimeException("通道不存在"));
+        removeChannelFromSubscriptions(userId, id);
         channelRepository.delete(ch);
     }
 
+    private void removeChannelFromSubscriptions(Long userId, Long channelId) {
+        List<Subscription> subscriptions = subscriptionRepository.findByUserId(userId);
+        for (Subscription sub : subscriptions) {
+            List<Long> channelIds = new ArrayList<>(sub.getChannelIds());
+            if (channelIds.remove(channelId)) {
+                sub.setChannelIds(channelIds);
+                subscriptionRepository.save(sub);
+            }
+        }
+    }
     private ChannelResponse toResponse(Channel ch) {
         return toResponse(ch, false);
     }
@@ -110,6 +126,14 @@ public class ChannelService {
         return merged;
     }
 
+    private Map<String, Object> sanitizeConfig(Map<String, Object> config) {
+        if (config == null) return Map.of();
+        Map<String, Object> sanitized = new LinkedHashMap<>(config);
+        sanitized.remove("sinkBaseUrl");
+        sanitized.remove("sinkToken");
+        return sanitized;
+    }
+
     private boolean isSecretKey(String key) {
         return Set.of("token", "webhookUrl", "webhook_url", "chatId", "apiToken", "secret", "appSecret", "app_secret", "receiveId").contains(key);
     }
@@ -117,7 +141,7 @@ public class ChannelService {
     private boolean shouldPreserveSecret(Object value) {
         if (value == null) return true;
         String text = String.valueOf(value);
-        return text.isBlank() || text.contains("...");
+        return text.isBlank() || text.contains("...") || text.chars().allMatch(ch -> ch == '*');
     }
 
     private String maskValue(Object value) {

@@ -6,12 +6,11 @@ import com.hotsearch.dto.HotSearchResult;
 import com.hotsearch.entity.HotSearchSnapshot;
 import com.hotsearch.fetcher.WeiboFetcher;
 import com.hotsearch.repository.HotSearchSnapshotRepository;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.*;
 
 @Service
@@ -20,21 +19,18 @@ public class HotSearchService {
     private final WeiboFetcher weiboFetcher;
     private final HotSearchSnapshotRepository snapshotRepository;
     private final ObjectMapper objectMapper;
-    private final ZoneId appZoneId;
 
     public HotSearchService(WeiboFetcher weiboFetcher, HotSearchSnapshotRepository snapshotRepository,
-                            ObjectMapper objectMapper,
-                            @Value("${spring.jackson.time-zone:Asia/Shanghai}") String appTimeZone) {
+                            ObjectMapper objectMapper) {
         this.weiboFetcher = weiboFetcher;
         this.snapshotRepository = snapshotRepository;
         this.objectMapper = objectMapper;
-        this.appZoneId = ZoneId.of(appTimeZone);
     }
 
     public List<HotSearchItem> fetchAndSave() {
         List<HotSearchItem> items = weiboFetcher.fetch();
         HotSearchSnapshot snapshot = new HotSearchSnapshot();
-        snapshot.setFetchedAt(LocalDateTime.now());
+        snapshot.setFetchedAt(LocalDateTime.now(ZoneOffset.UTC));
         snapshot.setItemsObject(items);
         snapshotRepository.save(snapshot);
         return items;
@@ -58,7 +54,7 @@ public class HotSearchService {
      * Returns a list of { fetchedAt, itemCount, topKeywords } maps.
      */
     public List<Map<String, Object>> getHistorySnapshots(int hours) {
-        LocalDateTime since = LocalDateTime.now().minusHours(hours);
+        LocalDateTime since = LocalDateTime.now(ZoneOffset.UTC).minusHours(hours);
         List<HotSearchSnapshot> snapshots = snapshotRepository.findByFetchedAtAfterOrderByFetchedAtDesc(since);
         
         List<Map<String, Object>> result = new ArrayList<>();
@@ -80,7 +76,7 @@ public class HotSearchService {
      * Returns [{ fetchedAt, rank, hotValue, label }]
      */
     public List<Map<String, Object>> getKeywordTrend(String keyword, int hours) {
-        LocalDateTime since = LocalDateTime.now().minusHours(hours);
+        LocalDateTime since = LocalDateTime.now(ZoneOffset.UTC).minusHours(hours);
         List<HotSearchSnapshot> snapshots = snapshotRepository.findByFetchedAtAfterOrderByFetchedAtDesc(since);
         
         List<Map<String, Object>> trend = new ArrayList<>();
@@ -112,6 +108,6 @@ public class HotSearchService {
     }
 
     private Instant toInstant(LocalDateTime localDateTime) {
-        return localDateTime.atZone(appZoneId).toInstant();
+        return localDateTime.toInstant(ZoneOffset.UTC);
     }
 }
