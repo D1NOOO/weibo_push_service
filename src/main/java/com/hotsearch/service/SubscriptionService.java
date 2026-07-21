@@ -8,6 +8,9 @@ import com.hotsearch.repository.ChannelRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Objects;
 
@@ -23,7 +26,12 @@ public class SubscriptionService {
     }
 
     public List<SubscriptionResponse> listByUser(Long userId) {
-        return subscriptionRepository.findByUserId(userId).stream()
+        return subscriptionRepository.findCurrentByUserId(userId, utcNow()).stream()
+                .map(this::toResponse).toList();
+    }
+
+    public List<SubscriptionResponse> listExpiredByUser(Long userId) {
+        return subscriptionRepository.findExpiredByUserId(userId, utcNow()).stream()
                 .map(this::toResponse).toList();
     }
 
@@ -38,6 +46,7 @@ public class SubscriptionService {
         sub.setMinHotValue(req.minHotValue());
         sub.setChannelIds(validateChannelIds(userId, req.channelIds()));
         sub.setEnabled(req.enabled() != null ? req.enabled() : true);
+        applyValidity(sub, req);
         return toResponse(subscriptionRepository.save(sub));
     }
 
@@ -53,6 +62,7 @@ public class SubscriptionService {
         sub.setMinHotValue(req.minHotValue());
         if (req.channelIds() != null) sub.setChannelIds(validateChannelIds(userId, req.channelIds()));
         sub.setEnabled(req.enabled());
+        applyValidity(sub, req);
         return toResponse(subscriptionRepository.save(sub));
     }
 
@@ -99,10 +109,33 @@ public class SubscriptionService {
     }
     private SubscriptionResponse toResponse(Subscription s) {
         return new SubscriptionResponse(s.getId(), s.getName(), s.getKeywords(),
-                s.getExcludeKeywords(), s.getLabels(), s.getMinHotValue(), s.getChannelIds(), s.getEnabled(), s.getCreatedAt());
+                s.getExcludeKeywords(), s.getLabels(), s.getMinHotValue(), s.getChannelIds(), s.getEnabled(),
+                s.getCreatedAt(), toInstant(s.getStartAt()), toInstant(s.getEndAt()));
     }
 
     public List<Subscription> listAllEnabled() {
-        return subscriptionRepository.findByEnabledTrue();
+        return subscriptionRepository.findAllEffectiveEnabled(utcNow());
+    }
+
+    private void applyValidity(Subscription subscription, SubscriptionRequest request) {
+        Instant startAt = request.startAt();
+        Instant endAt = request.endAt();
+        if (startAt != null && endAt != null && !startAt.isBefore(endAt)) {
+            throw new RuntimeException("结束时间必须晚于开始时间");
+        }
+        subscription.setStartAt(toUtcLocalDateTime(startAt));
+        subscription.setEndAt(toUtcLocalDateTime(endAt));
+    }
+
+    private Instant toInstant(LocalDateTime value) {
+        return value == null ? null : value.toInstant(ZoneOffset.UTC);
+    }
+
+    private LocalDateTime toUtcLocalDateTime(Instant value) {
+        return value == null ? null : LocalDateTime.ofInstant(value, ZoneOffset.UTC);
+    }
+
+    private LocalDateTime utcNow() {
+        return LocalDateTime.now(ZoneOffset.UTC);
     }
 }

@@ -1,9 +1,11 @@
 package com.hotsearch.dto;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 
 public record SubscriptionResponse(
     Long id, String name, List<String> keywords, List<String> excludeKeywords,
-    List<String> labels, Integer minHotValue, List<Long> channelIds, Boolean enabled, LocalDateTime createdAt
+    List<String> labels, Integer minHotValue, List<Long> channelIds, Boolean enabled,
+    LocalDateTime createdAt, Instant startAt, Instant endAt
 ) {}

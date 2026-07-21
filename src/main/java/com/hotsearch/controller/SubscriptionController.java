@@ -36,6 +36,13 @@ public class SubscriptionController {
         return ResponseEntity.ok(subscriptionService.listByUser(getUserId(authHeader)));
     }
 
+    @GetMapping("/history")
+    @Operation(summary = "获取已过期订阅列表")
+    public ResponseEntity<List<SubscriptionResponse>> history(
+            @RequestHeader("Authorization") String authHeader) {
+        return ResponseEntity.ok(subscriptionService.listExpiredByUser(getUserId(authHeader)));
+    }
+
     @GetMapping("/{id}")
     @Operation(summary = "获取单个订阅")
     public ResponseEntity<SubscriptionResponse> getById(

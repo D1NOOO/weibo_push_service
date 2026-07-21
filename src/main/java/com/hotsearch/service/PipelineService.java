@@ -100,6 +100,7 @@ public class PipelineService {
         for (var entry : matchesBySub.entrySet()) {
             List<MatchResult> subMatches = entry.getValue();
             Subscription sub = subMatches.get(0).subscription();
+            if (!sub.isEffectiveAtUtc(LocalDateTime.now(java.time.ZoneOffset.UTC))) continue;
 
             // Determine which channels to deliver to for this subscription
             List<Long> subChannelIds = sub.getChannelIds();
@@ -121,6 +122,7 @@ public class PipelineService {
                 List<String> targets = provider.getTargets(channel);
 
                 for (String target : targets) {
+                    if (!sub.isEffectiveAtUtc(LocalDateTime.now(java.time.ZoneOffset.UTC))) continue;
                     // Dedupe per target
                     List<MatchResult> toDeliver = new ArrayList<>();
                     for (MatchResult m : subMatches) {

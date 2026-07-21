@@ -30,12 +30,14 @@ class ApplicationConfigServiceTest {
 
         first.setDedupeWindowHours(12);
         first.setFetchIntervalMinutes(25);
+        first.setSnapshotRetentionDays(45);
         first.setSinkConfig("https://s.example.com/", "site-token");
 
         ApplicationConfigService restarted = service(repository, configPath, legacyPath);
         restarted.initialize();
         assertThat(restarted.getDedupeWindowHours()).isEqualTo(12);
         assertThat(restarted.getFetchIntervalMinutes()).isEqualTo(25);
+        assertThat(restarted.getSnapshotRetentionDays()).isEqualTo(45);
         assertThat(restarted.getSinkConfig())
                 .isEqualTo(new ApplicationConfigService.SinkConfig("https://s.example.com", "site-token"));
     }
@@ -64,7 +66,7 @@ class ApplicationConfigServiceTest {
     }
 
     private ApplicationConfigService service(ChannelRepository repository, Path configPath, Path legacyPath) {
-        return new ApplicationConfigService(repository, 6, 10, configPath, legacyPath);
+        return new ApplicationConfigService(repository, 6, 10, 30, configPath, legacyPath);
     }
 
     private ChannelRepository emptyRepository() {

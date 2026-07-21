@@ -98,7 +98,7 @@ class AppState {
     toggleTheme() {
         const newTheme = this.theme === 'light' ? 'dark' : 'light';
         this.setTheme(newTheme);
-        document.getElementById('btn-theme').textContent = newTheme === 'light' ? '🌙' : '☀️';
+        document.getElementById('btn-theme').textContent = newTheme === 'light' ? '深色模式' : '浅色模式';
     }
 
     startAutoRefresh() {
@@ -235,12 +235,17 @@ const ChartManager = {
         // Force canvas to respect device pixel ratio for sharp rendering
         Chart.defaults.devicePixelRatio = window.devicePixelRatio || 1;
 
+        const labelCanvas = document.getElementById('chart-labels');
+        const heatCanvas = document.getElementById('chart-heat');
+        Chart.getChart(labelCanvas)?.destroy();
+        Chart.getChart(heatCanvas)?.destroy();
+
         this.labelChart = new Chart(
-            document.getElementById('chart-labels').getContext('2d'),
+            labelCanvas.getContext('2d'),
             this.createLabelChartConfig()
         );
         this.heatChart = new Chart(
-            document.getElementById('chart-heat').getContext('2d'),
+            heatCanvas.getContext('2d'),
             this.createHeatChartConfig()
         );
     },
@@ -282,8 +287,8 @@ const ChartManager = {
                 datasets: [{
                     label: '热度值',
                     data: [],
-                    backgroundColor: DESIGN.purpleNeon,
-                    borderRadius: 6,
+                    backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '#0066cc',
+                    borderRadius: 5,
                     borderWidth: 0
                 }]
             },
@@ -303,11 +308,7 @@ const ChartManager = {
                     x: {
                         grid: { display: false },
                         ticks: {
-                            autoSkip: false,
-                            maxRotation: 45,
-                            minRotation: 0,
-                            font: { size: 11 },
-                            color: getComputedStyle(document.documentElement).getPropertyValue('--text-light')
+                            display: false
                         }
                     },
                     y: {
@@ -481,12 +482,13 @@ function renderHotSearch(result = null) {
     State.hotSearchFetchedAt = fetchedAt;
 
     if (!items.length) {
-        container.innerHTML = '<div class="empty"><div class="empty-icon">😔</div><p>暂无热搜数据</p></div>';
+        container.innerHTML = '<div class="empty"><p>暂无热搜数据</p></div>';
         return;
     }
 
     updateStats(items);
     updateCharts(items);
+    updateTopStory(items[0]);
 
     const search = document.getElementById('hotsearch-search').value.toLowerCase().trim();
     const filteredItems = search
@@ -524,20 +526,37 @@ async function loadHotSearch(options = {}) {
 }
 function renderHotItem(item, i) {
     const rank = item.rank || i + 1;
+    const rankClass = rank >= 1 && rank <= 3
+        ? `podium rank-${rank}`
+        : UTILS.getRankClass(rank);
     return `
         <div class="card hotsearch-card">
-            <span class="hot-rank ${i < 3 ? 'top' : UTILS.getRankClass(rank)}">${rank}</span>
+            <span class="hot-rank ${rankClass}">${rank}</span>
             <div class="hot-info">
                 <div class="hot-keyword">
                     ${item.url ? `<a href="${UTILS.escape(item.url)}" target="_blank" rel="noopener" class="hot-link">${UTILS.escape(item.keyword)}</a>` : UTILS.escape(item.keyword)}${item.isAd ? ' · 广告' : ''}
                 </div>
                 <div class="hot-meta">${item.label ? UTILS.escape(item.label) : ''} ${item.isAd ? '广告推广' : ''}</div>
             </div>
-            <button class="btn-trend" onclick="showTrend('${UTILS.escape(item.keyword).replace(/'/g, "\\'")}')" title="查看历史趋势">📈</button>
+            <button class="btn-trend" onclick="showTrend('${UTILS.escape(item.keyword).replace(/'/g, "\\'")}')" title="查看历史趋势">查看趋势</button>
             ${item.label ? `<span class="hot-label ${UTILS.getLabelClass(item.label)}">${UTILS.escape(item.label)}</span>` : ''}
             ${item.hotValue ? `<span class="hot-value ${UTILS.getHeatClass(item.hotValue)}">${UTILS.formatNum(item.hotValue)}</span>` : ''}
         </div>
     `;
+}
+
+function updateTopStory(item) {
+    if (!item) return;
+    const keyword = document.getElementById('top-story-keyword');
+    const heat = document.getElementById('top-story-heat');
+    const status = document.getElementById('top-story-status');
+    const trendButton = document.getElementById('btn-top-story-trend');
+
+    keyword.textContent = item.keyword;
+    heat.textContent = item.hotValue ? UTILS.formatNum(item.hotValue) : '暂无数据';
+    status.textContent = item.label ? `当前排名第 1 位 · ${item.label}` : '当前排名第 1 位';
+    trendButton.disabled = false;
+    trendButton.onclick = () => showTrend(item.keyword);
 }
 
 function updateStats(items) {
@@ -666,7 +685,7 @@ window.showTrend = async function(keyword) {
             return;
         }
         
-        let html = `<h4 style="margin-bottom:16px;">"${UTILS.escape(keyword)}" 📈 排名趋势</h4>`;
+        let html = `<h4 style="margin-bottom:16px;">"${UTILS.escape(keyword)}" 排名趋势</h4>`;
         html += '<div class="trend-chart">';
         
         const maxRank = Math.max(...trend.map(t => t.rank || 1));
@@ -701,12 +720,16 @@ async function loadConfig() {
         const config = await API.get('/api/config');
         const currentHours = config.dedupeWindowHours || 6;
         const currentInterval = config.fetchIntervalMinutes || 10;
+        const currentRetentionDays = config.snapshotRetentionDays || 30;
         document.getElementById('current-dedupe-hours').textContent = currentHours;
         document.getElementById('dedupe-hours').value = currentHours;
         document.getElementById('btn-save-dedupe-config').disabled = true;
         document.getElementById('fetch-interval-minutes').value = currentInterval;
         document.getElementById('current-fetch-interval').textContent = currentInterval;
         document.getElementById('btn-save-fetch-config').disabled = true;
+        document.getElementById('snapshot-retention-days').value = currentRetentionDays;
+        document.getElementById('current-retention-days').textContent = currentRetentionDays;
+        document.getElementById('btn-save-retention-config').disabled = true;
         document.getElementById('sink-base-url').value = config.sinkBaseUrl || '';
         document.getElementById('sink-site-token').value = config.sinkToken || '';
         State.config = config;
@@ -718,6 +741,10 @@ async function loadConfig() {
         document.getElementById('fetch-interval-minutes').oninput = () => {
             const newVal = parseInt(document.getElementById('fetch-interval-minutes').value);
             document.getElementById('btn-save-fetch-config').disabled = (newVal === currentInterval);
+        };
+        document.getElementById('snapshot-retention-days').oninput = () => {
+            const newVal = parseInt(document.getElementById('snapshot-retention-days').value);
+            document.getElementById('btn-save-retention-config').disabled = (newVal === currentRetentionDays);
         };
     } catch (e) { console.warn('加载配置失败:', e.message); }
 }
@@ -741,6 +768,18 @@ document.getElementById('btn-save-fetch-config').addEventListener('click', async
         document.getElementById('current-fetch-interval').textContent = minutes;
         document.getElementById('btn-save-fetch-config').disabled = true;
         UTILS.showToast(`数据抓取频率已更新为 ${minutes} 分钟/次`, 'success');
+    } catch (err) {
+        UTILS.showToast('保存失败: ' + err.message, 'error');
+    }
+});
+
+document.getElementById('btn-save-retention-config').addEventListener('click', async () => {
+    const days = parseInt(document.getElementById('snapshot-retention-days').value);
+    try {
+        await API.put('/api/config', { snapshotRetentionDays: days });
+        document.getElementById('current-retention-days').textContent = days;
+        document.getElementById('btn-save-retention-config').disabled = true;
+        UTILS.showToast(`快照保留时间已更新为 ${days} 天`, 'success');
     } catch (err) {
         UTILS.showToast('保存失败: ' + err.message, 'error');
     }
@@ -778,6 +817,35 @@ function invalidateChannelsCache() {
 }
 // ==================== Subscription Functions ====================
 let editingSubscriptionId = null;
+
+function beijingInputToIso(value) {
+    if (!value) return null;
+    const normalized = value.length === 16 ? `${value}:00` : value;
+    const date = new Date(`${normalized}+08:00`);
+    return isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function isoToBeijingInput(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (isNaN(date.getTime())) return '';
+    return new Date(date.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 19);
+}
+
+function formatBeijingDateTime(value) {
+    if (!value) return '长期';
+    const date = new Date(value);
+    if (isNaN(date.getTime())) return '-';
+    return new Intl.DateTimeFormat('zh-CN', {
+        timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    }).format(date);
+}
+
+function subscriptionValidityText(sub) {
+    if (!sub.startAt && !sub.endAt) return '长期有效';
+    return `${sub.startAt ? formatBeijingDateTime(sub.startAt) : '长期'} 至 ${sub.endAt ? formatBeijingDateTime(sub.endAt) : '长期'}`;
+}
 
 function loadSubscriptions() {
     const container = document.getElementById('sub-list');
@@ -822,7 +890,10 @@ function loadSubscriptions() {
                     <div class="item-header">
                         <div class="item-name">${UTILS.escape(sub.name)}</div>
                         <div style="display:flex;align-items:center;gap:6px;">
-                            <span class="status-dot ${sub.enabled ? 'on' : 'off'}"></span>
+                            ${sub.startAt && new Date(sub.startAt) > new Date()
+                                ? '<span class="tag">待生效</span>'
+                                : ''}
+                            <span class="status-dot ${sub.enabled && (!sub.startAt || new Date(sub.startAt) <= new Date()) ? 'on' : 'off'}"></span>
                             <div style="display:flex;gap:4px;">
                                 <button class="btn btn-sm btn-ghost" onclick="editSubscription(${sub.id})" title="编辑">编辑</button>
                                 <button class="btn btn-sm btn-ghost btn-danger" onclick="deleteSubscription(${sub.id})" title="删除">删除</button>
@@ -840,6 +911,7 @@ function loadSubscriptions() {
                         }</div>
                     ` : ''}
                     <div class="item-meta">
+                        有效期（北京时间）: ${subscriptionValidityText(sub)}<br>
                         标签过滤: ${sub.labels?.join(', ') || '无'} • 最低热度: ${sub.minHotValue || '不限'} • 推送: ${sub.channelIds?.length ? `已选${sub.channelIds.length}个通道` : '全部通道'} • 创建: ${UTILS.formatTime(sub.createdAt)}
                     </div>
                     <div class="item-actions">
@@ -871,10 +943,14 @@ function showSubscriptionModal(subscription = null) {
         document.getElementById('sub-exclude').value = subscription.excludeKeywords?.join(', ') || '';
         document.getElementById('sub-labels').value = subscription.labels?.join(', ') || '';
         document.getElementById('sub-min-hot').value = subscription.minHotValue || 0;
+        document.getElementById('sub-start-at').value = isoToBeijingInput(subscription.startAt);
+        document.getElementById('sub-end-at').value = isoToBeijingInput(subscription.endAt);
         document.getElementById('sub-enabled').checked = subscription.enabled !== false;
     } else {
         form.reset();
         document.getElementById('sub-min-hot').value = 0;
+        document.getElementById('sub-start-at').value = '';
+        document.getElementById('sub-end-at').value = '';
         document.getElementById('sub-enabled').checked = true;
     }
 
@@ -904,6 +980,13 @@ document.getElementById('btn-add-sub').addEventListener('click', () => showSubsc
 
 document.getElementById('sub-form').addEventListener('submit', async (e) => {
     e.preventDefault();
+
+    const startAt = beijingInputToIso(document.getElementById('sub-start-at').value);
+    const endAt = beijingInputToIso(document.getElementById('sub-end-at').value);
+    if (startAt && endAt && new Date(startAt) >= new Date(endAt)) {
+        UTILS.showToast('结束时间必须晚于开始时间', 'error');
+        return;
+    }
     
     const subscription = {
         name: document.getElementById('sub-name').value,
@@ -912,7 +995,9 @@ document.getElementById('sub-form').addEventListener('submit', async (e) => {
         labels: UTILS.splitList(document.getElementById('sub-labels').value),
         minHotValue: parseInt(document.getElementById('sub-min-hot').value) || null,
         channelIds: Array.from(document.querySelectorAll('.sub-ch-cb:checked')).map(cb => parseInt(cb.value)),
-        enabled: document.getElementById('sub-enabled').checked
+        enabled: document.getElementById('sub-enabled').checked,
+        startAt,
+        endAt
     };
     
     const id = document.getElementById('sub-id').value;
@@ -957,6 +1042,55 @@ function deleteSubscription(id) {
         loadSubscriptions();
     }).catch(err => UTILS.showToast(err.message, 'error'));
 }
+
+function loadExpiredSubscriptions() {
+    const container = document.getElementById('sub-history-list');
+    UTILS.showLoading(container);
+    API.get('/api/subscriptions/history').then(subscriptions => {
+        if (!subscriptions.length) {
+            container.innerHTML = '<div class="empty"><div class="empty-icon">—</div><p>暂无已过期规则</p></div>';
+            return;
+        }
+        container.innerHTML = subscriptions.map(sub => `
+            <div class="item-card">
+                <div class="item-header">
+                    <div class="item-name">${UTILS.escape(sub.name)}</div>
+                    <div style="display:flex;gap:4px;">
+                        <button class="btn btn-sm btn-ghost" onclick="editHistoricalSubscription(${sub.id})">编辑</button>
+                        <button class="btn btn-sm btn-ghost btn-danger" onclick="deleteHistoricalSubscription(${sub.id})">删除</button>
+                    </div>
+                </div>
+                ${sub.keywords?.length ? `<div class="item-tags">${sub.keywords.map(k => `<span class="tag">${UTILS.escape(k)}</span>`).join('')}</div>` : ''}
+                <div class="item-meta">
+                    有效期（北京时间）: ${subscriptionValidityText(sub)} • 状态: 已过期
+                </div>
+            </div>
+        `).join('');
+    }).catch(err => {
+        container.innerHTML = `<div class="empty"><div class="empty-icon">!</div><p>加载失败: ${UTILS.escape(err.message)}</p></div>`;
+    });
+}
+
+function showSubscriptionHistory() {
+    showModal('sub-history-modal');
+    loadExpiredSubscriptions();
+}
+
+function editHistoricalSubscription(id) {
+    hideModal('sub-history-modal');
+    editSubscription(id);
+}
+
+function deleteHistoricalSubscription(id) {
+    if (!confirm('确定删除这条历史规则吗？')) return;
+    API.delete(`/api/subscriptions/${id}`).then(() => {
+        UTILS.showToast('历史规则已删除', 'success');
+        loadExpiredSubscriptions();
+    }).catch(err => UTILS.showToast(err.message, 'error'));
+}
+
+document.getElementById('btn-sub-history').addEventListener('click', showSubscriptionHistory);
+document.getElementById('btn-close-sub-history').addEventListener('click', () => hideModal('sub-history-modal'));
 
 // Search subscriptions
 document.getElementById('sub-search').addEventListener('input', debounce(() => {
@@ -1402,7 +1536,7 @@ function showDashboard(username, mustChangePassword) {
 
     // Set theme
     State.setTheme(State.theme);
-    document.getElementById('btn-theme').textContent = State.theme === 'light' ? '🌙' : '☀️';
+    document.getElementById('btn-theme').textContent = State.theme === 'light' ? '深色模式' : '浅色模式';
 
     // Initialize charts then load initial tab
     setTimeout(() => {
@@ -1442,9 +1576,8 @@ setTimeout(() => {
     if (!hotsearchTab.querySelector('.freshness-banner')) {
         hotsearchTab.insertAdjacentHTML('afterbegin', `
             <div class="freshness-banner">
-                <div class="freshness-title">🎯 数据时效性说明</div>
+                <div class="freshness-title">热搜概览</div>
                 <p>数据为定时抓取快照，非实时更新。最近更新：<span class="freshness-time">—</span></p>
-                <p style="font-size:11px;color:var(--text-light);margin-top:4px;">系统按“系统配置”中的抓取频率自动获取微博热搜榜最新数据</p>
             </div>
         `);
     }

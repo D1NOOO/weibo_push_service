@@ -24,6 +24,10 @@ app:
     allowed-origin-patterns: "http://localhost:8080,http://127.0.0.1:8080"
   schedule:
     interval-minutes: 10
+    zone: Asia/Shanghai
+  snapshot:
+    retention-days: 30
+    cleanup-cron: "0 30 3 * * *"
   dedupe:
     window-hours: 6
   fetcher:

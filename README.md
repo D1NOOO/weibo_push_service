@@ -4,7 +4,8 @@
 
 ## 功能
 
-- **定时抓取** 微博热搜榜，保存历史快照
+- **定时抓取** 微博热搜榜，按整分钟刻度执行并保存历史快照
+- **自动清理** 可配置热搜快照保留天数，避免数据库无限增长
 - **灵活订阅** 支持关键词（含正则/前缀匹配）、排除词、标签过滤（爆/热/新）、最低热度阈值
 - **多渠道推送** 飞书卡片消息、钉钉、企业微信、Telegram、通用 Webhook
 - **批量推送** 一次匹配多条热搜合并为一条消息
@@ -62,6 +63,10 @@ mvn spring-boot:run
 app:
   schedule:
     interval-minutes: 10      # 默认抓取频率，可在系统配置页面动态修改
+    zone: Asia/Shanghai       # 调度时区；10 分钟对应 :00、:10、:20 等刻度
+  snapshot:
+    retention-days: 30       # 快照保留天数，可在系统配置页面动态修改
+    cleanup-cron: "0 30 3 * * *" # 每天 03:30 清理，应用启动时也会清理一次
   dedupe:
     window-hours: 6          # 去重窗口（小时内同一关键词不重复推送）
   fetcher:
@@ -79,8 +84,9 @@ app:
 | 排除词 | 排除包含指定文本的热搜 | `广告` |
 | 标签 | 仅匹配指定标签（爆/热/新等） | `爆`, `热` |
 | 最低热度 | 低于此值不推送 | `500000` |
+| 生效时间 | 可选的开始和结束时间，页面按北京时间（UTC+8）精确到秒；留空表示长期 | `2026-07-21 10:00:00` |
 
-广告类热搜自动排除。
+广告类热搜自动排除。未到开始时间或已经到达结束时间的规则不会触发推送；已过期规则可在“历史规则”中查看。
 
 ## 推送通道
 
@@ -146,6 +152,7 @@ GET    /api/hotsearch/trend      关键词排名趋势
 GET    /api/hotsearch/history    历史快照列表
 
 GET    /api/subscriptions        我的订阅列表
+GET    /api/subscriptions/history 已过期订阅列表
 POST   /api/subscriptions        创建订阅
 PUT    /api/subscriptions/{id}   更新订阅
 DELETE /api/subscriptions/{id}   删除订阅

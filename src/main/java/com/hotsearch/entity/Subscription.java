@@ -9,7 +9,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "subscriptions")
+@Table(name = "subscriptions", indexes = {
+        @Index(name = "idx_subscriptions_user_end", columnList = "user_id,end_at"),
+        @Index(name = "idx_subscriptions_enabled_window", columnList = "enabled,start_at,end_at")
+})
 public class Subscription {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -44,6 +47,12 @@ public class Subscription {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
+    @Column(name = "start_at")
+    private LocalDateTime startAt;
+
+    @Column(name = "end_at")
+    private LocalDateTime endAt;
+
     public Subscription() {
         this.createdAt = LocalDateTime.now();
     }
@@ -66,6 +75,15 @@ public class Subscription {
     public void setEnabled(Boolean enabled) { this.enabled = enabled; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public LocalDateTime getStartAt() { return startAt; }
+    public void setStartAt(LocalDateTime startAt) { this.startAt = startAt; }
+    public LocalDateTime getEndAt() { return endAt; }
+    public void setEndAt(LocalDateTime endAt) { this.endAt = endAt; }
+
+    public boolean isEffectiveAtUtc(LocalDateTime utcNow) {
+        return (startAt == null || !startAt.isAfter(utcNow))
+                && (endAt == null || endAt.isAfter(utcNow));
+    }
 
     public List<String> getKeywords() {
         return parseJsonList(keywordsJson);

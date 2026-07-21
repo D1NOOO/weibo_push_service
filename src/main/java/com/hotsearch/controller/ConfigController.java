@@ -51,6 +51,14 @@ public class ConfigController {
             configService.setFetchIntervalMinutes(minutes);
         }
 
+        if (body.containsKey("snapshotRetentionDays")) {
+            int days = numberValue(body.get("snapshotRetentionDays"), "快照保留天数");
+            if (days < 1 || days > 3_650) {
+                throw new RuntimeException("快照保留天数必须在 1-3650 天之间");
+            }
+            configService.setSnapshotRetentionDays(days);
+        }
+
         if (body.containsKey("sinkBaseUrl") || body.containsKey("sinkToken")) {
             ApplicationConfigService.SinkConfig current = configService.getSinkConfig();
             String baseUrl = body.containsKey("sinkBaseUrl")
@@ -70,6 +78,7 @@ public class ConfigController {
         Map<String, Object> config = new LinkedHashMap<>();
         config.put("dedupeWindowHours", configService.getDedupeWindowHours());
         config.put("fetchIntervalMinutes", configService.getFetchIntervalMinutes());
+        config.put("snapshotRetentionDays", configService.getSnapshotRetentionDays());
         config.put("sinkBaseUrl", sink.baseUrl());
         config.put("sinkToken", sink.token().isBlank() ? "" : MASKED_SECRET);
         config.put("sinkConfigured", sink.isConfigured());

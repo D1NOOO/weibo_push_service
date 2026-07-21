@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>微博热搜监控</title>
     <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/apple.css">
     <script async src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" onload="window.dispatchEvent(new Event('chartjs-ready'))"></script>
 </head>
 <body>
@@ -33,7 +34,7 @@
             <h1><span class="brand-mark brand-mark-sm">热</span>微博热搜监控</h1>
             <div class="header-right">
                 <span id="user-info"></span>
-                <button id="btn-theme" class="btn btn-icon" title="切换暗色/亮色模式 (⌘T)">🌙</button>
+                <button id="btn-theme" class="btn btn-sm" title="切换暗色/亮色模式 (⌘T)">深色模式</button>
                 <button id="btn-change-pwd" class="btn btn-sm" title="修改密码">改密</button>
                 <button id="btn-logout" class="btn btn-sm">退出</button>
             </div>
@@ -48,6 +49,19 @@
 
         <!-- 热搜榜 -->
         <section id="tab-hotsearch" class="tab-content active">
+            <section id="top-story" class="top-story" aria-labelledby="top-story-keyword">
+                <div class="top-story-rank" aria-hidden="true">01</div>
+                <div class="top-story-content">
+                    <span class="top-story-eyebrow">此刻最热</span>
+                    <h2 id="top-story-keyword">正在获取热搜数据</h2>
+                    <div class="top-story-meta">
+                        <span>热度值 <strong id="top-story-heat">—</strong></span>
+                        <span id="top-story-status">等待更新</span>
+                    </div>
+                </div>
+                <button id="btn-top-story-trend" class="top-story-link" type="button" disabled>查看趋势 ›</button>
+            </section>
+
             <!-- Stats + Label chart row -->
             <div class="stats-chart-row">
                 <div class="stats-grid-2x2" id="stats-row">
@@ -77,7 +91,7 @@
 
             <!-- Heat top 10 chart -->
             <div class="chart-container" id="chart-heat-container">
-                <div class="chart-title">热度 TOP 10</div>
+                <div class="chart-title">热度趋势（TOP 10）</div>
                 <canvas id="chart-heat" height="160"></canvas>
             </div>
 
@@ -89,8 +103,11 @@
                         <button id="btn-export-csv" class="btn btn-sm btn-ghost" title="导出CSV">CSV</button>
                         <button id="btn-export-json" class="btn btn-sm btn-ghost" title="导出JSON">JSON</button>
                     </div>
-                    <button id="btn-trigger" class="btn btn-primary btn-sm" title="立即执行一次刷新数据并检查所有订阅规则进行推送">手动触发</button>
+                    <button id="btn-trigger" class="btn btn-primary btn-sm" title="立即执行一次刷新数据并检查所有订阅规则进行推送">刷新数据</button>
                 </div>
+            </div>
+            <div class="hot-list-head" aria-hidden="true">
+                <span>排名</span><span>话题</span><span>热度值</span><span>操作</span>
             </div>
             <div id="hotsearch-list" class="card-list"></div>
         </section>
@@ -101,6 +118,7 @@
                 <h2>订阅规则</h2>
                 <div class="header-actions">
                     <input type="text" id="sub-search" class="search-input" placeholder="搜索订阅..." title="按名称/关键词过滤订阅列表">
+                    <button id="btn-sub-history" class="btn btn-sm">历史规则</button>
                     <button id="btn-add-sub" class="btn btn-primary btn-sm">+ 新增订阅</button>
                 </div>
             </div>
@@ -121,6 +139,11 @@
                         <input type="text" id="sub-labels" placeholder="例如：热,新,爆">
                         <label>最低热度值</label>
                         <input type="number" id="sub-min-hot" value="0" min="0">
+                        <label>开始时间（北京时间 UTC+8，可选）</label>
+                        <input type="datetime-local" id="sub-start-at" step="1">
+                        <label>结束时间（北京时间 UTC+8，可选）</label>
+                        <input type="datetime-local" id="sub-end-at" step="1">
+                        <div class="hint-text">精确到秒；不设置开始或结束时间表示该方向长期有效，到达结束时间后立即停止推送。</div>
                         <label>推送通道</label>
                         <div class="hint-text">提示：不选则推送到所有通道</div>
                         <div id="sub-channel-list" style="margin-bottom:8px;max-height:120px;overflow-y:auto;"></div>
@@ -130,6 +153,16 @@
                             <button type="button" class="btn" id="btn-cancel-sub">取消</button>
                         </div>
                     </form>
+                </div>
+            </div>
+            <div id="sub-history-modal" class="modal hidden">
+                <div class="modal-content" style="max-width:760px;">
+                    <div class="section-header" style="margin-bottom:16px;">
+                        <h3 style="margin:0;">历史规则</h3>
+                        <button type="button" class="btn btn-sm" id="btn-close-sub-history">关闭</button>
+                    </div>
+                    <div class="hint-text" style="margin-bottom:12px;">以下规则已超过结束时间，不再参与热搜匹配和推送。</div>
+                    <div id="sub-history-list" class="card-list"></div>
                 </div>
             </div>
         </section>
@@ -245,7 +278,7 @@
                         当前设置：<strong><span id="current-dedupe-hours">6</span> 小时</strong>
                     </p>
                     <div class="config-row">
-                        <select id="dedupe-hours" style="flex:1;max-width:150px;">
+                        <select id="dedupe-hours" class="config-control">
                             <option value="2">2 小时</option>
                             <option value="4">4 小时</option>
                             <option value="6" selected>6 小时</option>
@@ -266,12 +299,23 @@
                 <div class="config-card">
                     <h3>数据抓取频率</h3>
                     <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.6;">
-                        设置系统自动抓取微博热搜并执行推送管线的间隔，修改后从下一次调度开始生效。
+                        按北京时间整分钟刻度抓取并执行推送管线，例如 5 分钟对应 :00、:05、:10。修改后从下一次调度开始生效。
                     </p>
                     <div class="config-row">
-                        <input type="number" id="fetch-interval-minutes" min="1" max="1440" value="10" style="flex:1;max-width:150px;">
+                        <input type="number" id="fetch-interval-minutes" class="config-control" min="1" max="1440" value="10">
                         <span>分钟/次</span>
                         <button id="btn-save-fetch-config" class="btn btn-sm btn-primary" disabled>保存抓取频率</button>
+                    </div>
+                </div>
+                <div class="config-card">
+                    <h3>快照保留时间</h3>
+                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.6;">
+                        自动删除超过保留期的热搜历史快照。应用启动时及每天 03:30 执行清理，默认保留 30 天。
+                    </p>
+                    <div class="config-row">
+                        <input type="number" id="snapshot-retention-days" class="config-control" min="1" max="3650" value="30">
+                        <span>天</span>
+                        <button id="btn-save-retention-config" class="btn btn-sm btn-primary" disabled>保存保留时间</button>
                     </div>
                 </div>
                 <div class="config-card" id="sink-config-card">
@@ -279,10 +323,16 @@
                     <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.6;">
                         在此统一配置 Sink。配置完成后，可在任意推送通道中勾选“使用 Sink 短链接”。
                     </p>
-                    <label>Sink Base URL</label>
-                    <input type="url" id="sink-base-url" placeholder="https://s.20778888.xyz">
-                    <label>Sink Site Token</label>
-                    <input type="password" id="sink-site-token" placeholder="NUXT_SITE_TOKEN" autocomplete="new-password">
+                    <div class="config-field-grid">
+                        <label class="config-field" for="sink-base-url">
+                            <span>Sink Base URL</span>
+                            <input type="url" id="sink-base-url" placeholder="https://s.20778888.xyz">
+                        </label>
+                        <label class="config-field" for="sink-site-token">
+                            <span>Sink Site Token</span>
+                            <input type="password" id="sink-site-token" placeholder="NUXT_SITE_TOKEN" autocomplete="new-password">
+                        </label>
+                    </div>
                     <div class="hint-text">Token 仅保存在服务端；页面重新加载时只显示掩码。</div>
                     <button id="btn-save-sink-config" class="btn btn-sm btn-primary" style="margin-top:12px;">保存短链配置</button>
                 </div>
@@ -290,6 +340,7 @@
                     <h3>应用信息</h3>
                     <div style="font-size: 13px; line-height: 1.8;">
                         <p><strong>数据抓取</strong>：<span id="current-fetch-interval">10</span> 分钟/次（可配置）</p>
+                        <p><strong>快照保留</strong>：<span id="current-retention-days">30</span> 天（可配置）</p>
                         <p><strong>消息通道</strong>：飞书 · 钉钉 · 企微 · 微信 · Telegram · Webhook</p>
                         <p><strong>匹配模式</strong>：包含 · 前缀 · 正则</p>
                         <p><strong>数据时效</strong>：抓取快照，非实时</p>
@@ -321,7 +372,7 @@
     <!-- 热搜历史趋势模态框 -->
     <div id="history-modal" class="modal hidden">
         <div class="modal-content" style="max-width: 800px;">
-            <h3>📈 热搜历史趋势</h3>
+            <h3>热搜历史趋势</h3>
             <div id="history-content" style="margin: 15px 0; max-height: 500px; overflow-y: auto;">
                 <p style="font-size: 13px; color: var(--text-light); text-align: center; padding: 20px;">加载中...</p>
             </div>

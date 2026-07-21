@@ -30,24 +30,28 @@ public class ApplicationConfigService {
     private final Path legacyConfigPath;
     private volatile int dedupeWindowHours;
     private volatile int fetchIntervalMinutes;
+    private volatile int snapshotRetentionDays;
     private volatile String sinkBaseUrl = "";
     private volatile String sinkToken = "";
 
     @Autowired
     public ApplicationConfigService(ChannelRepository channelRepository,
                                     @Value("${app.dedupe.window-hours:6}") int defaultDedupeWindowHours,
-                                    @Value("${app.schedule.interval-minutes:10}") int defaultFetchIntervalMinutes) {
-        this(channelRepository, defaultDedupeWindowHours, defaultFetchIntervalMinutes,
+                                    @Value("${app.schedule.interval-minutes:10}") int defaultFetchIntervalMinutes,
+                                    @Value("${app.snapshot.retention-days:30}") int defaultSnapshotRetentionDays) {
+        this(channelRepository, defaultDedupeWindowHours, defaultFetchIntervalMinutes, defaultSnapshotRetentionDays,
                 Paths.get("data/app-config.properties"), Paths.get("data/dedupe-config.properties"));
     }
 
     ApplicationConfigService(ChannelRepository channelRepository, int defaultDedupeWindowHours,
-                             int defaultFetchIntervalMinutes, Path configPath, Path legacyConfigPath) {
+                             int defaultFetchIntervalMinutes, int defaultSnapshotRetentionDays,
+                             Path configPath, Path legacyConfigPath) {
         this.channelRepository = channelRepository;
         this.configPath = configPath;
         this.legacyConfigPath = legacyConfigPath;
         this.dedupeWindowHours = defaultDedupeWindowHours;
         this.fetchIntervalMinutes = defaultFetchIntervalMinutes;
+        this.snapshotRetentionDays = defaultSnapshotRetentionDays;
     }
 
     @PostConstruct
@@ -78,6 +82,15 @@ public class ApplicationConfigService {
         persist();
     }
 
+    public int getSnapshotRetentionDays() {
+        return snapshotRetentionDays;
+    }
+
+    public synchronized void setSnapshotRetentionDays(int days) {
+        snapshotRetentionDays = days;
+        persist();
+    }
+
     public SinkConfig getSinkConfig() {
         return new SinkConfig(sinkBaseUrl, sinkToken);
     }
@@ -99,6 +112,8 @@ public class ApplicationConfigService {
                     dedupeWindowHours, 1, 168);
             fetchIntervalMinutes = boundedInt(properties.getProperty("schedule.interval-minutes"),
                     fetchIntervalMinutes, 1, 1_440);
+            snapshotRetentionDays = boundedInt(properties.getProperty("snapshot.retention-days"),
+                    snapshotRetentionDays, 1, 3_650);
             sinkBaseUrl = properties.getProperty("sink.base-url", "").trim().replaceAll("/+$", "");
             sinkToken = properties.getProperty("sink.token", "").trim();
             if (source.equals(legacyConfigPath)) persist();
@@ -152,6 +167,7 @@ public class ApplicationConfigService {
             Properties properties = new Properties();
             properties.setProperty("dedupe.window-hours", String.valueOf(dedupeWindowHours));
             properties.setProperty("schedule.interval-minutes", String.valueOf(fetchIntervalMinutes));
+            properties.setProperty("snapshot.retention-days", String.valueOf(snapshotRetentionDays));
             properties.setProperty("sink.base-url", sinkBaseUrl);
             properties.setProperty("sink.token", sinkToken);
 
