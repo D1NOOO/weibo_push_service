@@ -440,9 +440,22 @@ header .btn:hover {
 .hot-rank.rank-2 { --rank-color: #ff9500; }
 .hot-rank.rank-3 { --rank-color: #f5b82e; }
 .hot-info { padding-right: 24px; }
-.hot-keyword { font-size: 15px; font-weight: 600; line-height: 1.35; }
+.hot-keyword {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.35;
+}
 .hot-link:hover { color: var(--primary); }
-.hot-meta { display: inline; margin-left: 8px; color: var(--text-light); font-size: 12px; }
+.hot-meta {
+    display: inline;
+    margin-left: 8px;
+    color: var(--text-light);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.35;
+    vertical-align: baseline;
+    white-space: nowrap;
+}
 .hot-label { display: none; }
 
 .hot-value {

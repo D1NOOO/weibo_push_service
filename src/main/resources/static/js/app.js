@@ -534,9 +534,10 @@ function renderHotItem(item, i) {
             <span class="hot-rank ${rankClass}">${rank}</span>
             <div class="hot-info">
                 <div class="hot-keyword">
-                    ${item.url ? `<a href="${UTILS.escape(item.url)}" target="_blank" rel="noopener" class="hot-link">${UTILS.escape(item.keyword)}</a>` : UTILS.escape(item.keyword)}${item.isAd ? ' · 广告' : ''}
+                    <span class="hot-keyword-text">${item.url ? `<a href="${UTILS.escape(item.url)}" target="_blank" rel="noopener" class="hot-link">${UTILS.escape(item.keyword)}</a>` : UTILS.escape(item.keyword)}${item.isAd ? ' · 广告' : ''}</span>
+                    ${item.label ? `<span class="hot-meta">${UTILS.escape(item.label)}</span>` : ''}
+                    ${item.isAd ? '<span class="hot-meta">广告推广</span>' : ''}
                 </div>
-                <div class="hot-meta">${item.label ? UTILS.escape(item.label) : ''} ${item.isAd ? '广告推广' : ''}</div>
             </div>
             <button class="btn-trend" onclick="showTrend('${UTILS.escape(item.keyword).replace(/'/g, "\\'")}')" title="查看历史趋势">查看趋势</button>
             ${item.label ? `<span class="hot-label ${UTILS.getLabelClass(item.label)}">${UTILS.escape(item.label)}</span>` : ''}

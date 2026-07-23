@@ -56,6 +56,18 @@ No actionable P0, P1, or P2 differences remain.
 - Interaction check: changing the fetch interval or dedupe window enables its save button; restoring the loaded value disables it again. No settings were saved during QA.
 - Post-fix evidence: `config-form-comparison.png`, `config-controls-after.jpg`, `config-sink-after.jpg`, and `config-mobile-sink-after.jpg`.
 
+### Iteration 6
+
+- Source visual truth: `C:/Users/dino/AppData/Local/Temp/codex-clipboard-4519391b-c0f8-4c3c-a829-775050bc957d.png` (1104 x 1054px).
+- Implementation evidence: `label-inline-desktop-final.png` at a 1104 x 1054 CSS viewport and `label-inline-mobile-final.png` at a 390 x 844 CSS viewport; screenshots are 1x with no density normalization required.
+- Earlier P2: topic labels such as “新” and “热” rendered as a second metadata row, making labelled topics taller and vertically offset from unlabelled topics.
+- Fix: moved label and advertising metadata into the topic's inline text flow, immediately after the keyword, while preserving the existing font sizes, colors, and column layout.
+- Earlier mobile P2: a flex-based first pass treated the label as a separate flex item, so long titles could push the label onto an otherwise empty line.
+- Fix: replaced the flex treatment with native inline text flow; labels now follow the final title text and wrap naturally with it.
+- Desktop measurement: ranks 1-14 all have a 20.25px keyword line box and the same -0.4px center offset from their 62px row, regardless of whether a label is present.
+- Mobile measurement: all sampled rows remain 72px high, labels follow the title text, and the 390px viewport has no horizontal overflow.
+- Full and focused comparison evidence: `label-inline-comparison.png`; no remaining P0, P1, or P2 mismatch is visible in the annotated region.
+
 ## Interaction and Responsive Checks
 
 - Live hot-search data loaded after the preview proxy was updated from the old host port 8080 to 28080.
