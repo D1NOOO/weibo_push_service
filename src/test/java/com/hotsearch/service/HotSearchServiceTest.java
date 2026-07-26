@@ -1,6 +1,6 @@
 package com.hotsearch.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hotsearch.dto.HotSearchItem;
 import com.hotsearch.entity.HotSearchSnapshot;
 import com.hotsearch.fetcher.WeiboFetcher;
 import com.hotsearch.repository.HotSearchSnapshotRepository;
@@ -20,11 +20,11 @@ class HotSearchServiceTest {
 
     private final WeiboFetcher fetcher = mock(WeiboFetcher.class);
     private final HotSearchSnapshotRepository repository = mock(HotSearchSnapshotRepository.class);
-    private final HotSearchService service = new HotSearchService(fetcher, repository, new ObjectMapper());
+    private final HotSearchService service = new HotSearchService(fetcher, repository);
 
     @Test
     void latestTreatsStoredSnapshotTimeAsUtc() {
-        HotSearchSnapshot snapshot = snapshot("2026-07-14T14:40:00", "[]");
+        HotSearchSnapshot snapshot = snapshot("2026-07-14T14:40:00", List.of());
         when(repository.findTopByOrderByFetchedAtDesc()).thenReturn(Optional.of(snapshot));
 
         assertThat(service.getLatestWithMeta().fetchedAt())
@@ -33,23 +33,39 @@ class HotSearchServiceTest {
 
     @Test
     void historyAndTrendExposeStoredSnapshotTimeAsUtc() {
-        HotSearchSnapshot snapshot = snapshot("2026-07-14T14:40:00", """
-                [{"rank":1,"keyword":"测试热搜","label":"热","hotValue":99999,"isAd":false,"url":"https://example.com"}]
-                """);
+        HotSearchSnapshot snapshot = snapshot("2026-07-14T14:40:00", List.of(
+                new HotSearchItem(1, "测试热搜", "热", 99999L, false, "https://example.com")));
         when(repository.findByFetchedAtAfterOrderByFetchedAtDesc(any(LocalDateTime.class)))
                 .thenReturn(List.of(snapshot));
 
         assertThat(service.getHistorySnapshots(24))
                 .singleElement()
-                .extracting(entry -> entry.get("fetchedAt"))
+                .extracting(entry -> entry.fetchedAt())
                 .isEqualTo("2026-07-14T14:40:00Z");
         assertThat(service.getKeywordTrend("测试", 24))
                 .singleElement()
-                .extracting(entry -> entry.get("fetchedAt"))
+                .extracting(point -> point.fetchedAt())
                 .isEqualTo("2026-07-14T14:40:00Z");
     }
 
-    private HotSearchSnapshot snapshot(String fetchedAt, String items) {
+    @Test
+    void trendMatchesKeywordByContains() {
+        HotSearchSnapshot snapshot = snapshot("2026-07-14T14:40:00", List.of(
+                new HotSearchItem(1, "无关词条", null, 1L, false, ""),
+                new HotSearchItem(2, "世界杯决赛", "爆", 500_000L, false, "")));
+        when(repository.findByFetchedAtAfterOrderByFetchedAtDesc(any(LocalDateTime.class)))
+                .thenReturn(List.of(snapshot));
+
+        assertThat(service.getKeywordTrend("世界杯", 24))
+                .singleElement()
+                .satisfies(point -> {
+                    assertThat(point.rank()).isEqualTo(2);
+                    assertThat(point.hotValue()).isEqualTo(500_000L);
+                    assertThat(point.label()).isEqualTo("爆");
+                });
+    }
+
+    private HotSearchSnapshot snapshot(String fetchedAt, List<HotSearchItem> items) {
         HotSearchSnapshot snapshot = new HotSearchSnapshot();
         snapshot.setFetchedAt(LocalDateTime.parse(fetchedAt));
         snapshot.setItems(items);

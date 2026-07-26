@@ -9,7 +9,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.*;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -27,21 +31,13 @@ public class DeliveryService {
         return deliveryLogRepository.save(log);
     }
 
-    public void clearAll() {
-        deliveryLogRepository.deleteAll();
-    }
-
+    /** 清空当前用户的全部推送日志（同时重置其去重状态），返回删除的日志条数。 */
     @Transactional
     public int clearByUser(Long userId) {
         List<Channel> userChannels = channelRepository.findByUserId(userId);
         if (userChannels.isEmpty()) return 0;
         List<Long> channelIds = userChannels.stream().map(Channel::getId).toList();
-        deliveryLogRepository.deleteByChannelIdIn(channelIds);
-        return channelIds.size();
-    }
-
-    public boolean isDuplicate(String keyword, Long channelId, LocalDateTime since) {
-        return deliveryLogRepository.existsByKeywordAndChannelIdAndDeliveredAtAfter(keyword, channelId, since);
+        return deliveryLogRepository.deleteByChannelIdIn(channelIds);
     }
 
     public boolean isDuplicate(String keyword, Long channelId, String target, LocalDateTime since) {
@@ -50,7 +46,7 @@ public class DeliveryService {
     }
 
     public List<DeliveryLogEntry> getRecentByUser(Long userId, int hours) {
-        LocalDateTime since = LocalDateTime.now().minusHours(hours);
+        LocalDateTime since = LocalDateTime.now(ZoneOffset.UTC).minusHours(hours);
 
         List<Channel> userChannels = channelRepository.findByUserId(userId);
         if (userChannels.isEmpty()) return List.of();
@@ -68,7 +64,7 @@ public class DeliveryService {
 
     private List<DeliveryLogEntry> groupByKeyword(List<DeliveryLog> logs,
                                                    Map<Long, Channel> channelMap) {
-        // Group by keyword, keep all delivery attempts per channel+target
+        // logs 已按 deliveredAt 倒序，分组保持相遇顺序：每组第一条即该关键词最新一次投递
         Map<String, List<DeliveryLog>> groupedByKw = logs.stream()
                 .collect(Collectors.groupingBy(
                         DeliveryLog::getKeyword,
@@ -78,16 +74,11 @@ public class DeliveryService {
 
         return groupedByKw.entrySet().stream()
                 .map(entry -> {
-                    String keyword = entry.getKey();
                     List<DeliveryLog> kwLogs = entry.getValue();
-
-                    List<DeliveryLogEntry.ChannelDelivery> channelDeliveries = new ArrayList<>();
                     DeliveryLog latest = kwLogs.get(0);
 
+                    List<DeliveryLogEntry.ChannelDelivery> channelDeliveries = new ArrayList<>();
                     for (DeliveryLog log : kwLogs) {
-                        if (log.getDeliveredAt().isAfter(latest.getDeliveredAt())) {
-                            latest = log;
-                        }
                         Channel ch = channelMap.get(log.getChannelId());
                         String provider = ch != null ? ch.getProvider() : "unknown";
                         channelDeliveries.add(new DeliveryLogEntry.ChannelDelivery(
@@ -100,7 +91,7 @@ public class DeliveryService {
                     }
 
                     return new DeliveryLogEntry(
-                            keyword,
+                            entry.getKey(),
                             latest.getLabel(),
                             latest.getHotValue(),
                             channelDeliveries,

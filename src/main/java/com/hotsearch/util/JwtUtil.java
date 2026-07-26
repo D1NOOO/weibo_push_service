@@ -7,6 +7,8 @@ import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Date;
 
 @Component
@@ -21,8 +23,20 @@ public class JwtUtil {
         if (secret == null || secret.isBlank() || secret.equals("changeme")) {
             throw new IllegalStateException("JWT_SECRET 必须设置，不能使用默认值");
         }
-        this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        this.key = Keys.hmacShaKeyFor(deriveSigningKey(secret));
         this.expirationMs = expirationMs;
+    }
+
+    /**
+     * 通过 SHA-256 把任意长度的 secret 派生为 256 位签名密钥，满足 HMAC-SHA256 的密钥长度要求。
+     * 注意：签名强度仍取决于 secret 本身的随机性，生产环境建议使用 32 字符以上的随机字符串。
+     */
+    private static byte[] deriveSigningKey(String secret) {
+        try {
+            return MessageDigest.getInstance("SHA-256").digest(secret.getBytes(StandardCharsets.UTF_8));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 算法不可用", e);
+        }
     }
 
     public String generateToken(Long userId, String username) {

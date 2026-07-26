@@ -4,6 +4,7 @@ import com.hotsearch.dto.ChannelRequest;
 import com.hotsearch.dto.ChannelResponse;
 import com.hotsearch.entity.Channel;
 import com.hotsearch.entity.Subscription;
+import com.hotsearch.exception.NotFoundException;
 import com.hotsearch.repository.ChannelRepository;
 import com.hotsearch.repository.SubscriptionRepository;
 import org.springframework.stereotype.Service;
@@ -44,7 +45,7 @@ public class ChannelService {
     public ChannelResponse update(Long userId, Long id, ChannelRequest req) {
         Channel ch = channelRepository.findById(id)
                 .filter(c -> c.getUserId().equals(userId))
-                .orElseThrow(() -> new RuntimeException("通道不存在"));
+                .orElseThrow(() -> new NotFoundException("通道不存在"));
         ch.setProvider(req.provider());
         ch.setConfigMap(mergeConfig(ch.getConfigMap(), sanitizeConfig(req.config())));
         ch.setEnabled(req.enabled());
@@ -54,21 +55,21 @@ public class ChannelService {
     public ChannelResponse getById(Long userId, Long id) {
         Channel ch = channelRepository.findById(id)
                 .filter(c -> c.getUserId().equals(userId))
-                .orElseThrow(() -> new RuntimeException("通道不存在"));
+                .orElseThrow(() -> new NotFoundException("通道不存在"));
         return toResponse(ch, false);
     }
 
     public Channel getEntityById(Long userId, Long id) {
         return channelRepository.findById(id)
                 .filter(c -> c.getUserId().equals(userId))
-                .orElseThrow(() -> new RuntimeException("通道不存在"));
+                .orElseThrow(() -> new NotFoundException("通道不存在"));
     }
 
     @Transactional
     public ChannelResponse updateEnabled(Long userId, Long id, boolean enabled) {
         Channel ch = channelRepository.findById(id)
                 .filter(c -> c.getUserId().equals(userId))
-                .orElseThrow(() -> new RuntimeException("通道不存在"));
+                .orElseThrow(() -> new NotFoundException("通道不存在"));
         ch.setEnabled(enabled);
         return toResponse(channelRepository.save(ch));
     }
@@ -77,7 +78,7 @@ public class ChannelService {
     public void delete(Long userId, Long id) {
         Channel ch = channelRepository.findById(id)
                 .filter(c -> c.getUserId().equals(userId))
-                .orElseThrow(() -> new RuntimeException("通道不存在"));
+                .orElseThrow(() -> new NotFoundException("通道不存在"));
         removeChannelFromSubscriptions(userId, id);
         channelRepository.delete(ch);
     }

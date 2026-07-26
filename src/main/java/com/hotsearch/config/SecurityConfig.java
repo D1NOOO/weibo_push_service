@@ -1,5 +1,6 @@
 package com.hotsearch.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,10 +19,13 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
+import java.util.Map;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
+
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     private final JwtAuthFilter jwtAuthFilter;
     private final List<String> allowedOriginPatterns;
@@ -66,7 +70,7 @@ public class SecurityConfig {
                         sendJsonError(response, HttpStatus.FORBIDDEN, "无权限访问"))
             )
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/api/auth/login").permitAll()
                 .requestMatchers("/api/health").permitAll()
                 .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                 .requestMatchers("/", "/index.html", "/css/**", "/js/**", "/img/**", "/favicon.ico").permitAll()
@@ -81,7 +85,7 @@ public class SecurityConfig {
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
         try {
-            response.getWriter().write("{\"message\":\"" + message + "\"}");
+            response.getWriter().write(JSON.writeValueAsString(Map.of("message", message)));
         } catch (Exception e) {
             // getWriter() can throw IllegalStateException if getOutputStream() was already called
         }

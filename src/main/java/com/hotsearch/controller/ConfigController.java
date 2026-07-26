@@ -1,5 +1,7 @@
 package com.hotsearch.controller;
 
+import com.hotsearch.dto.AppConfigResponse;
+import com.hotsearch.exception.BusinessException;
 import com.hotsearch.service.ApplicationConfigService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -11,7 +13,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 @RestController
@@ -28,17 +29,17 @@ public class ConfigController {
 
     @GetMapping
     @Operation(summary = "获取当前应用配置")
-    public ResponseEntity<Map<String, Object>> getConfig() {
+    public ResponseEntity<AppConfigResponse> getConfig() {
         return ResponseEntity.ok(responseConfig());
     }
 
     @PutMapping
     @Operation(summary = "更新应用配置")
-    public ResponseEntity<Map<String, Object>> updateConfig(@RequestBody Map<String, Object> body) {
+    public ResponseEntity<AppConfigResponse> updateConfig(@RequestBody Map<String, Object> body) {
         if (body.containsKey("dedupeWindowHours")) {
             int hours = numberValue(body.get("dedupeWindowHours"), "去重窗口");
             if (hours < 1 || hours > 168) {
-                throw new RuntimeException("去重窗口必须在 1-168 小时之间");
+                throw new BusinessException("去重窗口必须在 1-168 小时之间");
             }
             configService.setDedupeWindowHours(hours);
         }
@@ -46,7 +47,7 @@ public class ConfigController {
         if (body.containsKey("fetchIntervalMinutes")) {
             int minutes = numberValue(body.get("fetchIntervalMinutes"), "抓取频率");
             if (minutes < 1 || minutes > 1_440) {
-                throw new RuntimeException("抓取频率必须在 1-1440 分钟之间");
+                throw new BusinessException("抓取频率必须在 1-1440 分钟之间");
             }
             configService.setFetchIntervalMinutes(minutes);
         }
@@ -54,7 +55,7 @@ public class ConfigController {
         if (body.containsKey("snapshotRetentionDays")) {
             int days = numberValue(body.get("snapshotRetentionDays"), "快照保留天数");
             if (days < 1 || days > 3_650) {
-                throw new RuntimeException("快照保留天数必须在 1-3650 天之间");
+                throw new BusinessException("快照保留天数必须在 1-3650 天之间");
             }
             configService.setSnapshotRetentionDays(days);
         }
@@ -73,22 +74,22 @@ public class ConfigController {
         return ResponseEntity.ok(responseConfig());
     }
 
-    private Map<String, Object> responseConfig() {
+    private AppConfigResponse responseConfig() {
         ApplicationConfigService.SinkConfig sink = configService.getSinkConfig();
-        Map<String, Object> config = new LinkedHashMap<>();
-        config.put("dedupeWindowHours", configService.getDedupeWindowHours());
-        config.put("fetchIntervalMinutes", configService.getFetchIntervalMinutes());
-        config.put("snapshotRetentionDays", configService.getSnapshotRetentionDays());
-        config.put("sinkBaseUrl", sink.baseUrl());
-        config.put("sinkToken", sink.token().isBlank() ? "" : MASKED_SECRET);
-        config.put("sinkConfigured", sink.isConfigured());
-        return config;
+        return new AppConfigResponse(
+                configService.getDedupeWindowHours(),
+                configService.getFetchIntervalMinutes(),
+                configService.getSnapshotRetentionDays(),
+                sink.baseUrl(),
+                sink.token().isBlank() ? "" : MASKED_SECRET,
+                sink.isConfigured()
+        );
     }
 
     private void validateSinkConfig(String baseUrl, String token) {
         if (baseUrl.isBlank() && token.isBlank()) return;
         if (baseUrl.isBlank() || token.isBlank()) {
-            throw new RuntimeException("Sink Base URL 和 Site Token 必须同时配置");
+            throw new BusinessException("Sink Base URL 和 Site Token 必须同时配置");
         }
         try {
             URI uri = URI.create(baseUrl);
@@ -97,7 +98,7 @@ public class ConfigController {
                 throw new IllegalArgumentException();
             }
         } catch (IllegalArgumentException e) {
-            throw new RuntimeException("Sink Base URL 必须是有效的 HTTP/HTTPS 地址");
+            throw new BusinessException("Sink Base URL 必须是有效的 HTTP/HTTPS 地址");
         }
     }
 
@@ -106,7 +107,7 @@ public class ConfigController {
         try {
             return Integer.parseInt(stringValue(value));
         } catch (NumberFormatException e) {
-            throw new RuntimeException(fieldName + "必须是整数");
+            throw new BusinessException(fieldName + "必须是整数");
         }
     }
 

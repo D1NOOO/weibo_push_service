@@ -1,9 +1,9 @@
 package com.hotsearch.entity;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hotsearch.entity.converter.LongListJsonConverter;
+import com.hotsearch.entity.converter.StringListJsonConverter;
 import jakarta.persistence.*;
+
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -14,7 +14,6 @@ import java.util.List;
         @Index(name = "idx_subscriptions_enabled_window", columnList = "enabled,start_at,end_at")
 })
 public class Subscription {
-    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -26,17 +25,21 @@ public class Subscription {
     @Column(nullable = false)
     private String name;
 
+    @Convert(converter = StringListJsonConverter.class)
     @Column(name = "keywords", columnDefinition = "TEXT")
-    private String keywordsJson;
+    private List<String> keywords = new ArrayList<>();
 
+    @Convert(converter = StringListJsonConverter.class)
     @Column(name = "exclude_keywords", columnDefinition = "TEXT")
-    private String excludeKeywordsJson;
+    private List<String> excludeKeywords = new ArrayList<>();
 
+    @Convert(converter = StringListJsonConverter.class)
     @Column(name = "labels", columnDefinition = "TEXT")
-    private String labelsJson;
+    private List<String> labels = new ArrayList<>();
 
+    @Convert(converter = LongListJsonConverter.class)
     @Column(name = "channel_ids", columnDefinition = "TEXT")
-    private String channelIdsJson;
+    private List<Long> channelIds = new ArrayList<>();
 
     @Column(name = "min_hot_value")
     private Integer minHotValue;
@@ -55,12 +58,6 @@ public class Subscription {
 
     public Subscription() {
         this.createdAt = LocalDateTime.now();
-    }
-
-    @PrePersist
-    @PreUpdate
-    private void serializeJson() {
-        // JSON fields are set directly via setters
     }
 
     public Long getId() { return id; }
@@ -86,57 +83,34 @@ public class Subscription {
     }
 
     public List<String> getKeywords() {
-        return parseJsonList(keywordsJson);
+        return keywords == null ? new ArrayList<>() : keywords;
     }
+
     public void setKeywords(List<String> keywords) {
-        this.keywordsJson = toJson(keywords);
+        this.keywords = keywords == null ? new ArrayList<>() : new ArrayList<>(keywords);
     }
 
     public List<String> getExcludeKeywords() {
-        return parseJsonList(excludeKeywordsJson);
+        return excludeKeywords == null ? new ArrayList<>() : excludeKeywords;
     }
-    public void setExcludeKeywords(List<String> keywords) {
-        this.excludeKeywordsJson = toJson(keywords);
+
+    public void setExcludeKeywords(List<String> excludeKeywords) {
+        this.excludeKeywords = excludeKeywords == null ? new ArrayList<>() : new ArrayList<>(excludeKeywords);
     }
 
     public List<String> getLabels() {
-        return parseJsonList(labelsJson);
+        return labels == null ? new ArrayList<>() : labels;
     }
+
     public void setLabels(List<String> labels) {
-        this.labelsJson = toJson(labels);
+        this.labels = labels == null ? new ArrayList<>() : new ArrayList<>(labels);
     }
 
     public List<Long> getChannelIds() {
-        List<String> raw = parseJsonList(channelIdsJson);
-        List<Long> ids = new ArrayList<>();
-        for (String s : raw) {
-            try { ids.add(Long.parseLong(s)); } catch (NumberFormatException ignored) {}
-        }
-        return ids;
-    }
-    public void setChannelIds(List<Long> ids) {
-        if (ids == null) {
-            this.channelIdsJson = "[]";
-            return;
-        }
-        this.channelIdsJson = toJson(ids.stream().map(String::valueOf).toList());
+        return channelIds == null ? new ArrayList<>() : channelIds;
     }
 
-    private List<String> parseJsonList(String json) {
-        if (json == null || json.isBlank()) return new ArrayList<>();
-        try {
-            return MAPPER.readValue(json, new TypeReference<>() {});
-        } catch (JsonProcessingException e) {
-            return new ArrayList<>();
-        }
-    }
-
-    private String toJson(List<String> list) {
-        if (list == null) return "[]";
-        try {
-            return MAPPER.writeValueAsString(list);
-        } catch (JsonProcessingException e) {
-            return "[]";
-        }
+    public void setChannelIds(List<Long> channelIds) {
+        this.channelIds = channelIds == null ? new ArrayList<>() : new ArrayList<>(channelIds);
     }
 }

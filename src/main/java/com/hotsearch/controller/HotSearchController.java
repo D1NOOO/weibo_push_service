@@ -1,6 +1,9 @@
 package com.hotsearch.controller;
 
 import com.hotsearch.dto.HotSearchResult;
+import com.hotsearch.dto.SnapshotSummary;
+import com.hotsearch.dto.TrendPoint;
+import com.hotsearch.exception.BusinessException;
 import com.hotsearch.service.HotSearchService;
 import com.hotsearch.service.PipelineService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -31,15 +34,15 @@ public class HotSearchController {
     }
 
     @PostMapping("/trigger")
-    @Operation(summary = "手动触发推送管线")
+    @Operation(summary = "手动触发推送管线", description = "异步执行，立即返回；上一轮未结束时跳过本次触发。")
     public ResponseEntity<Map<String, String>> trigger() {
-        pipelineService.runPipeline();
-        return ResponseEntity.ok(Map.of("message", "管线已触发"));
+        boolean started = pipelineService.trigger();
+        return ResponseEntity.ok(Map.of("message", started ? "管线已触发" : "管线正在执行中，请稍后再试"));
     }
 
     @GetMapping("/history")
     @Operation(summary = "获取热搜历史快照列表")
-    public ResponseEntity<List<Map<String, Object>>> getHistory(
+    public ResponseEntity<List<SnapshotSummary>> getHistory(
             @RequestParam(defaultValue = "24") int hours) {
         int safeHours = Math.max(1, Math.min(hours, 168));
         return ResponseEntity.ok(hotSearchService.getHistorySnapshots(safeHours));
@@ -47,14 +50,14 @@ public class HotSearchController {
 
     @GetMapping("/trend")
     @Operation(summary = "获取指定关键词的历史排名趋势")
-    public ResponseEntity<List<Map<String, Object>>> getKeywordTrend(
+    public ResponseEntity<List<TrendPoint>> getKeywordTrend(
             @RequestParam String keyword,
             @RequestParam(defaultValue = "24") int hours) {
         if (keyword == null || keyword.isBlank()) {
-            throw new RuntimeException("关键词不能为空");
+            throw new BusinessException("关键词不能为空");
         }
         if (keyword.length() > 200) {
-            throw new RuntimeException("关键词长度不能超过200字符");
+            throw new BusinessException("关键词长度不能超过200字符");
         }
         int safeHours = Math.max(1, Math.min(hours, 168));
         return ResponseEntity.ok(hotSearchService.getKeywordTrend(keyword.trim(), safeHours));

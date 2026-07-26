@@ -5,7 +5,7 @@
 ## 功能
 
 - **定时抓取** 微博热搜榜，按整分钟刻度执行并保存历史快照
-- **自动清理** 可配置热搜快照保留天数，避免数据库无限增长
+- **自动清理** 可配置数据保留天数，过期的热搜快照与推送日志自动删除，避免数据库无限增长
 - **灵活订阅** 支持关键词（含正则/前缀匹配）、排除词、标签过滤（爆/热/新）、最低热度阈值
 - **多渠道推送** 飞书卡片消息、钉钉、企业微信、Telegram、通用 Webhook
 - **批量推送** 一次匹配多条热搜合并为一条消息
@@ -17,7 +17,7 @@
 
 | 层 | 技术 |
 |----|------|
-| 框架 | Spring Boot 3.2 + Java 21 |
+| 框架 | Spring Boot 3.5 + Java 21 |
 | 数据库 | SQLite + Hibernate (JPA) |
 | 安全 | Spring Security + JWT (jjwt 0.12) + BCrypt |
 | 前端 | 原生 HTML/CSS/JS + Chart.js v4 |
@@ -29,16 +29,23 @@
 ### Docker 部署
 
 ```bash
-# 1. 设置 JWT 密钥
-export JWT_SECRET=$(openssl rand -base64 32)
+# 1. 复制环境变量模板为 .env（Windows 用 Copy-Item .env.example .env）
+cp .env.example .env
 
-# 2. 构建并启动
+# 2. 编辑 .env，填入 JWT_SECRET（必填，留空启动会直接报错；任意长度均可，建议 32+ 字符随机串）
+#    生成示例：openssl rand -base64 48
+#    PowerShell：[Convert]::ToBase64String((1..48 | ForEach-Object { Get-Random -Maximum 256 }))
+
+# 3. 构建并启动
 docker compose up -d --build
 
-# 3. 访问
-# 管理界面: http://localhost:8080
-# 默认账号: admin / admin123 (首次登录强制修改密码)
+# 4. 访问（docker-compose 默认映射到 127.0.0.1:28080）
+# 管理界面: http://localhost:28080
+# 默认账号: admin / admin123（可在 .env 中用 ADMIN_INITIAL_PASSWORD 覆盖；首次登录强制修改密码）
 ```
+
+> 容器以非 root 用户（uid=100, gid=101）运行。Linux 宿主机首次启动前请执行
+> `mkdir -p data && sudo chown -R 100:101 data`，否则 SQLite 数据目录不可写。
 
 ### 本地开发
 
@@ -50,9 +57,12 @@ mvn spring-boot:run
 
 ## 环境变量
 
+Docker 部署时通过项目根目录的 `.env` 文件传入（从 [.env.example](./.env.example) 复制并修改，该文件不会被提交）；本地开发时也可直接用 shell 环境变量。
+
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `JWT_SECRET` | 无（必填） | JWT 签名密钥，至少 32 字符 |
+| `JWT_SECRET` | 无（必填） | JWT 签名密钥，任意长度（内部经 SHA-256 派生）；建议 32+ 字符随机串 |
+| `ADMIN_INITIAL_PASSWORD` | 无 | 首次启动创建 admin 账号时的初始密码；未设置时使用内置默认值并强制首登改密 |
 | `SPRING_JPA_HIBERNATE_DDL_AUTO` | `update` | 数据库 schema 策略 |
 
 ## 配置说明
@@ -65,10 +75,14 @@ app:
     interval-minutes: 10      # 默认抓取频率，可在系统配置页面动态修改
     zone: Asia/Shanghai       # 调度时区；10 分钟对应 :00、:10、:20 等刻度
   snapshot:
-    retention-days: 30       # 快照保留天数，可在系统配置页面动态修改
+    retention-days: 30       # 数据保留天数（快照与推送日志），可在系统配置页面动态修改
     cleanup-cron: "0 30 3 * * *" # 每天 03:30 清理，应用启动时也会清理一次
   dedupe:
     window-hours: 6          # 去重窗口（小时内同一关键词不重复推送）
+  push:
+    retry:
+      max-attempts: 3        # 上游限频时的退避重试次数
+      delay-seconds: 12      # 每次重试间隔（秒）
   fetcher:
     user-agent: "..."        # 抓取请求的 UA
     # cookie: "SUB=xxx"      # 可选，微博 Cookie 避免 403
@@ -105,7 +119,7 @@ app:
 推荐将 [Sink](https://github.com/miantiao-me/Sink) 作为独立服务部署到 Cloudflare Workers，而不是把其源码集成进本项目。这样 Sink 的 KV、分析能力和发布周期与热搜服务解耦，本项目只通过服务端调用 `POST /api/link/create`。
 
 1. 按 Sink 文档部署 Workers、绑定自定义域名，并配置 `NUXT_SITE_TOKEN`。
-2. 在“系统配置 → Sink 短链服务”填写 `Sink Base URL`（例如 `https://s.20778888.xyz`）和与 `NUXT_SITE_TOKEN` 相同的 `Sink Site Token`。
+2. 在“系统配置 → Sink 短链服务”填写 `Sink Base URL`（例如 `https://s.example.com`）和与 `NUXT_SITE_TOKEN` 相同的 `Sink Site Token`。
 3. 编辑任意推送通道，勾选“使用 Sink 短链接”。飞书、钉钉、企业微信、微信机器人、Telegram 和通用 Webhook 均支持。
 
 仅当通道开关启用且全局 Sink 配置完整时才会缩短微博 URL。Sink 不可用或返回异常时，本次推送自动保留原始长链接，消息不会因短链服务故障而中断。旧版保存在微信通道中的 Sink 凭据会在启动时自动迁移到全局配置。
@@ -147,7 +161,7 @@ app:
 
 ```
 GET    /api/hotsearch            最新热搜数据
-POST   /api/hotsearch/trigger    手动触发推送管线
+POST   /api/hotsearch/trigger    手动触发推送管线（异步执行，立即返回）
 GET    /api/hotsearch/trend      关键词排名趋势
 GET    /api/hotsearch/history    历史快照列表
 
@@ -176,14 +190,30 @@ POST   /api/auth/change-password 修改密码
 ```
 src/main/java/com/hotsearch/
 ├── HotsearchApplication.java
-├── config/          # Security, RateLimiter, JWT filter
+├── config/          # Security、限流、JWT 过滤器、@CurrentUserId 解析器
 ├── controller/      # REST API
 ├── dto/             # Request/Response records
-├── entity/          # JPA entities
-├── fetcher/         # Weibo hot search fetcher
-├── matcher/         # Subscription matching engine
-├── provider/        # Message providers (Feishu/Dingtalk/etc.)
-├── repository/      # Spring Data JPA repositories
-├── service/         # Business logic
-└── util/            # JWT utilities
+├── entity/          # JPA 实体（JSON 字段统一走 entity/converter 转换器）
+├── exception/       # ApiException 体系（404/400/429/502 统一映射）
+├── fetcher/         # 微博热搜抓取（AJAX 优先，HTML 兜底）
+├── matcher/         # 订阅规则匹配引擎
+├── provider/        # 推送提供者（飞书/钉钉/企微/微信/Telegram/Webhook）
+├── repository/      # Spring Data JPA 仓库
+├── service/         # 业务逻辑（管线 = Planner 规划 + Executor 执行）
+└── util/            # JWT 工具
 ```
+
+## 错误码约定
+
+| 状态码 | 含义 |
+|--------|------|
+| 400 | 请求参数或业务规则不满足（含通道配置缺失） |
+| 401 | 未登录或登录已过期 |
+| 404 | 资源不存在或不属于当前用户 |
+| 429 | 登录尝试过于频繁 |
+| 502 | 推送上游（微信/飞书等）调用失败 |
+| 500 | 服务器内部错误（细节仅记录在服务端日志） |
+
+## License
+
+本项目基于 [MIT License](./LICENSE) 开源。欢迎提 Issue 与 PR；提交代码前请运行 `mvn test` 确保测试全部通过。

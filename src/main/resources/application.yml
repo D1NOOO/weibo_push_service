@@ -19,6 +19,10 @@ jwt:
   secret: ${JWT_SECRET}
   expiration-ms: 86400000
 
+admin:
+  # 首个管理员账号的初始密码；未设置时使用内置默认值并强制首登改密
+  initial-password: ${ADMIN_INITIAL_PASSWORD:}
+
 app:
   cors:
     allowed-origin-patterns: "http://localhost:8080,http://127.0.0.1:8080"
@@ -30,6 +34,11 @@ app:
     cleanup-cron: "0 30 3 * * *"
   dedupe:
     window-hours: 6
+  push:
+    retry:
+      # 上游限频时的退避重试策略
+      max-attempts: 3
+      delay-seconds: 12
   fetcher:
     user-agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
     timeout-seconds: 15

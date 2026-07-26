@@ -3,6 +3,8 @@ package com.hotsearch.service;
 import com.hotsearch.dto.SubscriptionRequest;
 import com.hotsearch.dto.SubscriptionResponse;
 import com.hotsearch.entity.Subscription;
+import com.hotsearch.exception.BusinessException;
+import com.hotsearch.exception.NotFoundException;
 import com.hotsearch.repository.SubscriptionRepository;
 import com.hotsearch.repository.ChannelRepository;
 import org.springframework.stereotype.Service;
@@ -54,7 +56,7 @@ public class SubscriptionService {
     public SubscriptionResponse update(Long userId, Long id, SubscriptionRequest req) {
         Subscription sub = subscriptionRepository.findById(id)
                 .filter(s -> s.getUserId().equals(userId))
-                .orElseThrow(() -> new RuntimeException("订阅不存在"));
+                .orElseThrow(() -> new NotFoundException("订阅不存在"));
         sub.setName(req.name());
         sub.setKeywords(req.keywords() != null ? req.keywords() : List.of());
         sub.setExcludeKeywords(req.excludeKeywords() != null ? req.excludeKeywords() : List.of());
@@ -70,7 +72,7 @@ public class SubscriptionService {
     public SubscriptionResponse updateEnabled(Long userId, Long id, boolean enabled) {
         Subscription sub = subscriptionRepository.findById(id)
                 .filter(s -> s.getUserId().equals(userId))
-                .orElseThrow(() -> new RuntimeException("订阅不存在"));
+                .orElseThrow(() -> new NotFoundException("订阅不存在"));
         sub.setEnabled(enabled);
         return toResponse(subscriptionRepository.save(sub));
     }
@@ -78,7 +80,7 @@ public class SubscriptionService {
     public SubscriptionResponse getById(Long userId, Long id) {
         Subscription sub = subscriptionRepository.findById(id)
                 .filter(s -> s.getUserId().equals(userId))
-                .orElseThrow(() -> new RuntimeException("订阅不存在"));
+                .orElseThrow(() -> new NotFoundException("订阅不存在"));
         return toResponse(sub);
     }
 
@@ -86,7 +88,7 @@ public class SubscriptionService {
     public void delete(Long userId, Long id) {
         Subscription sub = subscriptionRepository.findById(id)
                 .filter(s -> s.getUserId().equals(userId))
-                .orElseThrow(() -> new RuntimeException("订阅不存在"));
+                .orElseThrow(() -> new NotFoundException("订阅不存在"));
         subscriptionRepository.delete(sub);
     }
 
@@ -103,7 +105,7 @@ public class SubscriptionService {
         }
         long validCount = channelRepository.countByUserIdAndIdIn(userId, normalized);
         if (validCount != normalized.size()) {
-            throw new RuntimeException("订阅包含不存在或无权限的推送通道");
+            throw new BusinessException("订阅包含不存在或无权限的推送通道");
         }
         return normalized;
     }
@@ -121,7 +123,7 @@ public class SubscriptionService {
         Instant startAt = request.startAt();
         Instant endAt = request.endAt();
         if (startAt != null && endAt != null && !startAt.isBefore(endAt)) {
-            throw new RuntimeException("结束时间必须晚于开始时间");
+            throw new BusinessException("结束时间必须晚于开始时间");
         }
         subscription.setStartAt(toUtcLocalDateTime(startAt));
         subscription.setEndAt(toUtcLocalDateTime(endAt));

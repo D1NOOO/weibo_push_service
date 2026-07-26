@@ -25,6 +25,10 @@ data/
 mvnw
 mvnw.cmd
 
-# Env
+# Env（环境变量模板 .env.example 除外，需随仓库分发）
 .env
-.env.local
+.env.*
+!.env.example
+
+# 内部工作文档（不随仓库分发）
+refactoring-plan.md

@@ -191,10 +191,26 @@ const UTILS = {
     },
     showToast(message, type = 'info') {
         const toast = document.getElementById('toast');
-        toast.textContent = message;
+        clearTimeout(UTILS._toastTimer);
+        clearTimeout(UTILS._toastHideTimer);
+
+        const icon = document.createElement('span');
+        icon.className = 'toast-icon';
+        icon.textContent = type === 'success' ? '✓' : type === 'error' ? '✕' : type === 'warning' ? '!' : 'i';
+        const msg = document.createElement('span');
+        msg.className = 'toast-msg';
+        msg.textContent = message;
+        toast.replaceChildren(icon, msg);
+
+        // 连续触发时先经过一次 display:none 并强制 reflow，确保入场动画重新播放
+        toast.className = 'toast hidden';
+        void toast.offsetWidth;
         toast.className = `toast ${type}`;
-        toast.classList.remove('hidden');
-        setTimeout(() => toast.classList.add('hidden'), 3000);
+
+        UTILS._toastTimer = setTimeout(() => {
+            toast.classList.add('closing');
+            UTILS._toastHideTimer = setTimeout(() => toast.classList.add('hidden'), 220);
+        }, 3000);
     },
     showLoading(container) {
         container.innerHTML = `
@@ -961,17 +977,18 @@ function showSubscriptionModal(subscription = null) {
         const selectedIds = subscription?.channelIds || [];
         if (channels.length) {
             container.innerHTML = channels.map(ch => `
-                <label class="checkbox-label" style="font-size:13px;">
+                <label class="checkbox-label channel-picker-item">
                     <input type="checkbox" class="sub-ch-cb" value="${ch.id}"
                         ${selectedIds.includes(ch.id) ? 'checked' : ''}>
                     ${getProviderLabel(ch.provider)} ${ch.provider === 'wechat' ? '→ ' + UTILS.escape(ch.config?.chat || '未配置') : ''}
                 </label>
             `).join('');
         } else {
-            container.innerHTML = '<span style="font-size:12px;color:var(--text-light);">暂无可用通道</span>';
+            container.innerHTML = '<span class="channel-picker-empty">暂无可用通道</span>';
         }
     }).catch(() => {
-        document.getElementById('sub-channel-list').innerHTML = '<span style="font-size:12px;color:var(--text-light);">加载通道失败</span>';
+        document.getElementById('sub-channel-list').innerHTML =
+            '<span class="channel-picker-empty">加载通道失败</span>';
     });
 
     showModal('sub-modal');
@@ -1498,23 +1515,51 @@ document.getElementById('log-hours').addEventListener('change', () => {
 
 // ==================== Modal Utilities ====================
 let lastFocusedElement = null;
+const MODAL_EXIT_MS = 220;
 
 function showModal(modalId) {
     const modal = document.getElementById(modalId);
     if (!modal) return;
     lastFocusedElement = document.activeElement;
+    clearTimeout(modal._hideTimer);
+    modal.classList.remove('closing');
     modal.classList.remove('hidden');
+    // 键盘可达性：弹窗打开后聚焦第一个可编辑控件
+    requestAnimationFrame(() => {
+        const first = modal.querySelector(
+            'input:not([type="hidden"]):not([type="checkbox"]):not([disabled]), select:not([disabled]), textarea:not([disabled])');
+        if (first) first.focus();
+    });
 }
 
 function hideModal(modalId) {
     const modal = document.getElementById(modalId);
-    if (!modal) return;
-    modal.classList.add('hidden');
+    if (!modal || modal.classList.contains('hidden') || modal.classList.contains('closing')) return;
+    // 播放退出动画后再真正隐藏；reduced-motion 下动画时长趋近 0，仅多等一帧
+    modal.classList.add('closing');
+    modal._hideTimer = setTimeout(() => {
+        modal.classList.add('hidden');
+        modal.classList.remove('closing');
+    }, MODAL_EXIT_MS);
     if (lastFocusedElement) {
         lastFocusedElement.focus();
         lastFocusedElement = null;
     }
 }
+
+// 点击遮罩关闭（点击面板内部不关闭）
+document.querySelectorAll('.modal').forEach(modal => {
+    modal.addEventListener('mousedown', e => {
+        if (e.target === modal) hideModal(modal.id);
+    });
+});
+
+// ESC 关闭最上层弹窗
+document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    const open = document.querySelectorAll('.modal:not(.hidden):not(.closing)');
+    if (open.length) hideModal(open[open.length - 1].id);
+});
 
 // ==================== Debounce Utility ====================
 function debounce(func, wait) {

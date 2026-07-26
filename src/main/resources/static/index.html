@@ -145,8 +145,8 @@
                         <input type="datetime-local" id="sub-end-at" step="1">
                         <div class="hint-text">精确到秒；不设置开始或结束时间表示该方向长期有效，到达结束时间后立即停止推送。</div>
                         <label>推送通道</label>
-                        <div class="hint-text">提示：不选则推送到所有通道</div>
-                        <div id="sub-channel-list" style="margin-bottom:8px;max-height:120px;overflow-y:auto;"></div>
+                        <div class="hint-text hint-above">提示：不选则推送到所有通道</div>
+                        <div id="sub-channel-list" class="channel-picker"></div>
                         <label class="checkbox-label"><input type="checkbox" id="sub-enabled" checked> 启用</label>
                         <div class="modal-actions">
                             <button type="submit" class="btn btn-primary">保存</button>
@@ -230,16 +230,16 @@
                             <label>API Base URL</label>
                             <input type="text" id="ch-wechat-api" placeholder="http://localhost:5001" value="http://localhost:5001">
                             <label>API Token</label>
-                            <input type="text" id="ch-wechat-token" placeholder="wechatbot-api-test-2026">
+                            <input type="text" id="ch-wechat-token" placeholder="微信机器人 API Token">
                             <label>目标聊天名称</label>
-                            <input type="text" id="ch-wechat-chat" placeholder="Feng 或 胖达测试群2026">
-                            <div class="hint-text">提示：多个聊天用逗号分隔，如：Feng,胖达测试群2026</div>
+                            <input type="text" id="ch-wechat-chat" placeholder="好友昵称 或 群聊名称">
+                            <div class="hint-text">提示：多个聊天用逗号分隔，如：张三,项目通知群</div>
                         </div>
                         <div id="ch-provider-hint" class="hint-text">提示：飞书群机器人 → 添加机器人 → 复制 Webhook 地址</div>
-                        <div style="margin-top:12px;padding:12px;border:1px solid var(--border);border-radius:8px;">
-                            <label class="checkbox-label" style="margin:0;"><input type="checkbox" id="ch-shortlink-enabled"> 使用 Sink 短链接</label>
-                            <div class="hint-text" style="margin-top:6px;">启用后，此通道消息中的热搜链接会使用系统配置的 Sink 服务。</div>
-                            <button type="button" id="btn-open-sink-config" class="btn btn-sm" style="margin-top:8px;">前往配置短链服务</button>
+                        <div class="modal-subcard">
+                            <label class="checkbox-label checkbox-label-flush"><input type="checkbox" id="ch-shortlink-enabled"> 使用 Sink 短链接</label>
+                            <div class="hint-text">启用后，此通道消息中的热搜链接会使用系统配置的 Sink 服务。</div>
+                            <button type="button" id="btn-open-sink-config" class="btn btn-sm">前往配置短链服务</button>
                         </div>
                         <label class="checkbox-label"><input type="checkbox" id="ch-enabled" checked> 启用</label>
                         <div class="modal-actions">
@@ -326,7 +326,7 @@
                     <div class="config-field-grid">
                         <label class="config-field" for="sink-base-url">
                             <span>Sink Base URL</span>
-                            <input type="url" id="sink-base-url" placeholder="https://s.20778888.xyz">
+                            <input type="url" id="sink-base-url" placeholder="https://s.example.com">
                         </label>
                         <label class="config-field" for="sink-site-token">
                             <span>Sink Site Token</span>

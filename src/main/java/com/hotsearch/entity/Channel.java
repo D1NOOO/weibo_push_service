@@ -1,15 +1,15 @@
 package com.hotsearch.entity;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hotsearch.entity.converter.JsonMapConverter;
 import jakarta.persistence.*;
+
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 @Entity
 @Table(name = "channels")
 public class Channel {
-    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -21,8 +21,9 @@ public class Channel {
     @Column(nullable = false)
     private String provider;
 
-    @Column(columnDefinition = "TEXT")
-    private String config;
+    @Convert(converter = JsonMapConverter.class)
+    @Column(name = "config", columnDefinition = "TEXT")
+    private Map<String, Object> config = new LinkedHashMap<>();
 
     @Column(nullable = false)
     private Boolean enabled = true;
@@ -45,24 +46,11 @@ public class Channel {
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 
-    @SuppressWarnings("unchecked")
     public Map<String, Object> getConfigMap() {
-        if (config == null || config.isBlank()) return Map.of();
-        try {
-            return MAPPER.readValue(config, Map.class);
-        } catch (JsonProcessingException e) {
-            return Map.of();
-        }
+        return config == null ? Map.of() : config;
     }
 
     public void setConfigMap(Map<String, Object> configMap) {
-        try {
-            this.config = MAPPER.writeValueAsString(configMap);
-        } catch (JsonProcessingException e) {
-            this.config = "{}";
-        }
+        this.config = configMap == null ? new LinkedHashMap<>() : new LinkedHashMap<>(configMap);
     }
-
-    public String getConfig() { return config; }
-    public void setConfig(String config) { this.config = config; }
 }

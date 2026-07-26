@@ -1,8 +1,9 @@
 package com.hotsearch.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hotsearch.dto.HotSearchItem;
 import com.hotsearch.dto.HotSearchResult;
+import com.hotsearch.dto.SnapshotSummary;
+import com.hotsearch.dto.TrendPoint;
 import com.hotsearch.entity.HotSearchSnapshot;
 import com.hotsearch.fetcher.WeiboFetcher;
 import com.hotsearch.repository.HotSearchSnapshotRepository;
@@ -11,100 +12,70 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 public class HotSearchService {
 
     private final WeiboFetcher weiboFetcher;
     private final HotSearchSnapshotRepository snapshotRepository;
-    private final ObjectMapper objectMapper;
 
-    public HotSearchService(WeiboFetcher weiboFetcher, HotSearchSnapshotRepository snapshotRepository,
-                            ObjectMapper objectMapper) {
+    public HotSearchService(WeiboFetcher weiboFetcher, HotSearchSnapshotRepository snapshotRepository) {
         this.weiboFetcher = weiboFetcher;
         this.snapshotRepository = snapshotRepository;
-        this.objectMapper = objectMapper;
     }
 
     public List<HotSearchItem> fetchAndSave() {
         List<HotSearchItem> items = weiboFetcher.fetch();
         HotSearchSnapshot snapshot = new HotSearchSnapshot();
         snapshot.setFetchedAt(LocalDateTime.now(ZoneOffset.UTC));
-        snapshot.setItemsObject(items);
+        snapshot.setItems(items);
         snapshotRepository.save(snapshot);
         return items;
     }
 
-    public List<HotSearchItem> getLatest() {
-        return snapshotRepository.findTopByOrderByFetchedAtDesc()
-                .map(s -> parseItems(s.getItems()))
-                .orElse(List.of());
-    }
-
     public HotSearchResult getLatestWithMeta() {
         return snapshotRepository.findTopByOrderByFetchedAtDesc()
-                .map(s -> new HotSearchResult(parseItems(s.getItems()),
-                        toInstant(s.getFetchedAt())))
+                .map(s -> new HotSearchResult(s.getItems(), toInstant(s.getFetchedAt())))
                 .orElse(new HotSearchResult(List.of(), null));
     }
 
-    /**
-     * Get history snapshots summary for the given hours.
-     * Returns a list of { fetchedAt, itemCount, topKeywords } maps.
-     */
-    public List<Map<String, Object>> getHistorySnapshots(int hours) {
+    /** 最近 hours 小时内的快照摘要列表（倒序）。 */
+    public List<SnapshotSummary> getHistorySnapshots(int hours) {
         LocalDateTime since = LocalDateTime.now(ZoneOffset.UTC).minusHours(hours);
         List<HotSearchSnapshot> snapshots = snapshotRepository.findByFetchedAtAfterOrderByFetchedAtDesc(since);
-        
-        List<Map<String, Object>> result = new ArrayList<>();
-        for (HotSearchSnapshot snap : snapshots) {
-            List<HotSearchItem> items = parseItems(snap.getItems());
-            Map<String, Object> entry = new LinkedHashMap<>();
-            entry.put("fetchedAt", toInstant(snap.getFetchedAt()).toString());
-            entry.put("itemCount", items.size());
-            // Top 3 keywords as summary
-            entry.put("topKeywords", items.stream().limit(3)
-                    .map(HotSearchItem::keyword).toList());
-            result.add(entry);
+
+        List<SnapshotSummary> result = new ArrayList<>(snapshots.size());
+        for (HotSearchSnapshot snapshot : snapshots) {
+            List<HotSearchItem> items = snapshot.getItems();
+            result.add(new SnapshotSummary(
+                    toInstant(snapshot.getFetchedAt()).toString(),
+                    items.size(),
+                    items.stream().limit(3).map(HotSearchItem::keyword).toList()
+            ));
         }
         return result;
     }
 
-    /**
-     * Get rank trend for a specific keyword over time.
-     * Returns [{ fetchedAt, rank, hotValue, label }]
-     */
-    public List<Map<String, Object>> getKeywordTrend(String keyword, int hours) {
+    /** 关键词（模糊包含）在最近 hours 小时内的排名趋势（倒序）。 */
+    public List<TrendPoint> getKeywordTrend(String keyword, int hours) {
         LocalDateTime since = LocalDateTime.now(ZoneOffset.UTC).minusHours(hours);
         List<HotSearchSnapshot> snapshots = snapshotRepository.findByFetchedAtAfterOrderByFetchedAtDesc(since);
-        
-        List<Map<String, Object>> trend = new ArrayList<>();
-        for (HotSearchSnapshot snap : snapshots) {
-            List<HotSearchItem> items = parseItems(snap.getItems());
-            items.stream()
+
+        List<TrendPoint> trend = new ArrayList<>();
+        for (HotSearchSnapshot snapshot : snapshots) {
+            snapshot.getItems().stream()
                     .filter(item -> item.keyword() != null && item.keyword().contains(keyword))
                     .findFirst()
-                    .ifPresent(item -> {
-                        Map<String, Object> point = new LinkedHashMap<>();
-                        point.put("fetchedAt", toInstant(snap.getFetchedAt()).toString());
-                        point.put("rank", item.rank());
-                        point.put("hotValue", item.hotValue());
-                        point.put("label", item.label());
-                        trend.add(point);
-                    });
+                    .ifPresent(item -> trend.add(new TrendPoint(
+                            toInstant(snapshot.getFetchedAt()).toString(),
+                            item.rank(),
+                            item.hotValue(),
+                            item.label()
+                    )));
         }
         return trend;
-    }
-
-    private List<HotSearchItem> parseItems(String json) {
-        if (json == null || json.isBlank()) return List.of();
-        try {
-            return objectMapper.readValue(json,
-                    objectMapper.getTypeFactory().constructCollectionType(List.class, HotSearchItem.class));
-        } catch (Exception e) {
-            return List.of();
-        }
     }
 
     private Instant toInstant(LocalDateTime localDateTime) {

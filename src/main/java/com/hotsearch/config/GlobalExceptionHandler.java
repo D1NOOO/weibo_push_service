@@ -1,5 +1,6 @@
 package com.hotsearch.config;
 
+import com.hotsearch.exception.ApiException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -16,10 +17,10 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-    @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<Map<String, Object>> handleRuntime(RuntimeException e) {
-        log.warn("业务异常: {}", e.getMessage());
-        return buildError(HttpStatus.BAD_REQUEST, e.getMessage());
+    @ExceptionHandler(ApiException.class)
+    public ResponseEntity<Map<String, Object>> handleApi(ApiException e) {
+        log.warn("业务异常({}): {}", e.getStatus().value(), e.getMessage());
+        return buildError(e.getStatus(), e.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

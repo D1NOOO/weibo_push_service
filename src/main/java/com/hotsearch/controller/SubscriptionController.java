@@ -1,10 +1,10 @@
 package com.hotsearch.controller;
 
+import com.hotsearch.config.CurrentUserId;
 import com.hotsearch.dto.SubscriptionRequest;
 import com.hotsearch.dto.SubscriptionResponse;
 import com.hotsearch.dto.EnabledRequest;
 import com.hotsearch.service.SubscriptionService;
-import com.hotsearch.util.JwtUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -19,70 +19,63 @@ import java.util.List;
 public class SubscriptionController {
 
     private final SubscriptionService subscriptionService;
-    private final JwtUtil jwtUtil;
 
-    public SubscriptionController(SubscriptionService subscriptionService, JwtUtil jwtUtil) {
+    public SubscriptionController(SubscriptionService subscriptionService) {
         this.subscriptionService = subscriptionService;
-        this.jwtUtil = jwtUtil;
-    }
-
-    private Long getUserId(String authHeader) {
-        return jwtUtil.getUserId(authHeader.replace("Bearer ", ""));
     }
 
     @GetMapping
     @Operation(summary = "获取订阅列表")
-    public ResponseEntity<List<SubscriptionResponse>> list(@RequestHeader("Authorization") String authHeader) {
-        return ResponseEntity.ok(subscriptionService.listByUser(getUserId(authHeader)));
+    public ResponseEntity<List<SubscriptionResponse>> list(@CurrentUserId Long userId) {
+        return ResponseEntity.ok(subscriptionService.listByUser(userId));
     }
 
     @GetMapping("/history")
     @Operation(summary = "获取已过期订阅列表")
-    public ResponseEntity<List<SubscriptionResponse>> history(
-            @RequestHeader("Authorization") String authHeader) {
-        return ResponseEntity.ok(subscriptionService.listExpiredByUser(getUserId(authHeader)));
+    public ResponseEntity<List<SubscriptionResponse>> history(@CurrentUserId Long userId) {
+        return ResponseEntity.ok(subscriptionService.listExpiredByUser(userId));
     }
 
     @GetMapping("/{id}")
     @Operation(summary = "获取单个订阅")
     public ResponseEntity<SubscriptionResponse> getById(
-            @RequestHeader("Authorization") String authHeader,
+            @CurrentUserId Long userId,
             @PathVariable Long id) {
-        return ResponseEntity.ok(subscriptionService.getById(getUserId(authHeader), id));
+        return ResponseEntity.ok(subscriptionService.getById(userId, id));
     }
 
     @PostMapping
     @Operation(summary = "创建订阅")
     public ResponseEntity<SubscriptionResponse> create(
-            @RequestHeader("Authorization") String authHeader,
+            @CurrentUserId Long userId,
             @Valid @RequestBody SubscriptionRequest req) {
-        return ResponseEntity.ok(subscriptionService.create(getUserId(authHeader), req));
+        return ResponseEntity.ok(subscriptionService.create(userId, req));
     }
 
     @PutMapping("/{id}")
     @Operation(summary = "更新订阅")
     public ResponseEntity<SubscriptionResponse> update(
-            @RequestHeader("Authorization") String authHeader,
+            @CurrentUserId Long userId,
             @PathVariable Long id,
             @Valid @RequestBody SubscriptionRequest req) {
-        return ResponseEntity.ok(subscriptionService.update(getUserId(authHeader), id, req));
+        return ResponseEntity.ok(subscriptionService.update(userId, id, req));
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "删除订阅")
     public ResponseEntity<Void> delete(
-            @RequestHeader("Authorization") String authHeader,
+            @CurrentUserId Long userId,
             @PathVariable Long id) {
-        subscriptionService.delete(getUserId(authHeader), id);
+        subscriptionService.delete(userId, id);
         return ResponseEntity.noContent().build();
     }
 
     @PatchMapping("/{id}/enabled")
     @Operation(summary = "启用或禁用订阅")
     public ResponseEntity<SubscriptionResponse> updateEnabled(
-            @RequestHeader("Authorization") String authHeader,
+            @CurrentUserId Long userId,
             @PathVariable Long id,
             @Valid @RequestBody EnabledRequest req) {
-        return ResponseEntity.ok(subscriptionService.updateEnabled(getUserId(authHeader), id, req.enabled()));
+        return ResponseEntity.ok(subscriptionService.updateEnabled(userId, id, req.enabled()));
     }
 }

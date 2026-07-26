@@ -2,7 +2,7 @@
 
 ## Scope
 
-- This is a Spring Boot 3.2 / Java 21 service with a native HTML, CSS, and JavaScript admin UI.
+- This is a Spring Boot 3.5 / Java 21 service with a native HTML, CSS, and JavaScript admin UI.
 - Backend code lives in `src/main/java/com/hotsearch`; static UI files live in `src/main/resources/static`.
 - Keep changes focused on the requested behavior. Preserve unrelated local modifications.
 

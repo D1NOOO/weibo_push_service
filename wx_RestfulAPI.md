@@ -12,13 +12,13 @@
 **方式一：Query 参数**
 
 ```
-?token=wechatbot-api-test-2026
+?token=YOUR_API_TOKEN
 ```
 
 **方式二：Bearer Header**
 
 ```
-Authorization: Bearer wechatbot-api-test-2026
+Authorization: Bearer YOUR_API_TOKEN
 ```
 
 ---
@@ -40,17 +40,17 @@ Authorization: Bearer wechatbot-api-test-2026
 **请求示例：**
 
 ```bash
-curl -X POST "http://localhost:5001/api/send/message?token=wechatbot-api-test-2026" \
+curl -X POST "http://localhost:5001/api/send/message?token=YOUR_API_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"chat":"Feng","message":"你好，这是测试消息"}'
+  -d '{"chat":"张三","message":"你好，这是测试消息"}'
 ```
 
 **群聊 @ 某人：**
 
 ```bash
-curl -X POST "http://localhost:5001/api/send/message?token=wechatbot-api-test-2026" \
+curl -X POST "http://localhost:5001/api/send/message?token=YOUR_API_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"chat":"胖达测试群2026","message":"请注意查收","at_users":["张三"]}'
+  -d '{"chat":"项目通知群","message":"请注意查收","at_users":["张三"]}'
 ```
 
 **成功响应：**
@@ -58,7 +58,7 @@ curl -X POST "http://localhost:5001/api/send/message?token=wechatbot-api-test-20
 ```json
 {
     "success": true,
-    "chat": "Feng",
+    "chat": "张三",
     "message_id": "msg_1778780053_0",
     "message_ids": ["msg_1778780053_0"],
     "sent_count": 1,
@@ -93,8 +93,8 @@ Content-Type: `multipart/form-data`
 **请求示例 — 发送图片：**
 
 ```bash
-curl -X POST "http://localhost:5001/api/send/file?token=wechatbot-api-test-2026" \
-  -F "chat=Feng" \
+curl -X POST "http://localhost:5001/api/send/file?token=YOUR_API_TOKEN" \
+  -F "chat=张三" \
   -F "file_type=image" \
   -F "file=@C:\Users\dino\Pictures\photo.png"
 ```
@@ -102,8 +102,8 @@ curl -X POST "http://localhost:5001/api/send/file?token=wechatbot-api-test-2026"
 **请求示例 — 发送文件：**
 
 ```bash
-curl -X POST "http://localhost:5001/api/send/file?token=wechatbot-api-test-2026" \
-  -F "chat=胖达测试群2026" \
+curl -X POST "http://localhost:5001/api/send/file?token=YOUR_API_TOKEN" \
+  -F "chat=项目通知群" \
   -F "file_type=document" \
   -F "file=@D:\docs\report.pdf"
 ```
@@ -114,7 +114,7 @@ curl -X POST "http://localhost:5001/api/send/file?token=wechatbot-api-test-2026"
 {
     "success": true,
     "message_id": "file_1778780053",
-    "chat": "Feng",
+    "chat": "张三",
     "file_path": "C:\\Users\\dino\\Pictures\\photo.png",
     "file_type": "image",
     "timestamp": 1778780053.123
@@ -145,12 +145,12 @@ curl -X POST "http://localhost:5001/api/send/file?token=wechatbot-api-test-2026"
 **请求示例：**
 
 ```bash
-curl -X POST "http://localhost:5001/api/send/batch?token=wechatbot-api-test-2026" \
+curl -X POST "http://localhost:5001/api/send/batch?token=YOUR_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "messages": [
-      {"chat": "Feng", "message": "消息1"},
-      {"chat": "胖达测试群2026", "message": "消息2"}
+      {"chat": "张三", "message": "消息1"},
+      {"chat": "项目通知群", "message": "消息2"}
     ],
     "delay_between": 2
   }'
@@ -165,8 +165,8 @@ curl -X POST "http://localhost:5001/api/send/batch?token=wechatbot-api-test-2026
     "succeeded": 2,
     "failed": 0,
     "results": [
-        {"success": true, "chat": "Feng", "message_id": "msg_xxx_0"},
-        {"success": true, "chat": "胖达测试群2026", "message_id": "msg_xxx_1"}
+        {"success": true, "chat": "张三", "message_id": "msg_xxx_0"},
+        {"success": true, "chat": "项目通知群", "message_id": "msg_xxx_1"}
     ]
 }
 ```
@@ -178,7 +178,7 @@ curl -X POST "http://localhost:5001/api/send/batch?token=wechatbot-api-test-2026
 **`GET /api/send/stats`**
 
 ```bash
-curl "http://localhost:5001/api/send/stats?token=wechatbot-api-test-2026"
+curl "http://localhost:5001/api/send/stats?token=YOUR_API_TOKEN"
 ```
 
 **响应：**
@@ -198,7 +198,7 @@ curl "http://localhost:5001/api/send/stats?token=wechatbot-api-test-2026"
 **`POST /api/send/stats/reset`** — 重置统计
 
 ```bash
-curl -X POST "http://localhost:5001/api/send/stats/reset?token=wechatbot-api-test-2026"
+curl -X POST "http://localhost:5001/api/send/stats/reset?token=YOUR_API_TOKEN"
 ```
 
 ---
@@ -210,7 +210,7 @@ curl -X POST "http://localhost:5001/api/send/stats/reset?token=wechatbot-api-tes
 **`GET /api/listen/list`**
 
 ```bash
-curl "http://localhost:5001/api/listen/list?token=wechatbot-api-test-2026"
+curl "http://localhost:5001/api/listen/list?token=YOUR_API_TOKEN"
 ```
 
 **响应：**
@@ -220,15 +220,15 @@ curl "http://localhost:5001/api/listen/list?token=wechatbot-api-test-2026"
     "success": true,
     "data": [
         {
-            "name": "Feng",
+            "name": "张三",
             "type": "private",
-            "prompt": "私信_胖达",
+            "prompt": "私信_张三",
             "enable_forward": true,
             "enable_ai_reply": false,
             "status": "listening"
         },
         {
-            "name": "胖达测试群2026",
+            "name": "项目通知群",
             "type": "group",
             "prompt": "群聊_default",
             "enable_forward": true,
@@ -302,7 +302,7 @@ curl "http://localhost:5001/health"
 **`GET /api/status`**
 
 ```bash
-curl "http://localhost:5001/api/status?token=wechatbot-api-test-2026"
+curl "http://localhost:5001/api/status?token=YOUR_API_TOKEN"
 ```
 
 ```json
@@ -330,7 +330,7 @@ curl "http://localhost:5001/api/status?token=wechatbot-api-test-2026"
 **`GET /api/stats`**
 
 ```bash
-curl "http://localhost:5001/api/stats?token=wechatbot-api-test-2026"
+curl "http://localhost:5001/api/stats?token=YOUR_API_TOKEN"
 ```
 
 ---
@@ -342,7 +342,7 @@ curl "http://localhost:5001/api/stats?token=wechatbot-api-test-2026"
 **`GET /api/config/webhook`**
 
 ```bash
-curl "http://localhost:5001/api/config/webhook?token=wechatbot-api-test-2026"
+curl "http://localhost:5001/api/config/webhook?token=YOUR_API_TOKEN"
 ```
 
 ### 4.2 设置配置
@@ -392,7 +392,7 @@ curl "http://localhost:5001/api/config/webhook?token=wechatbot-api-test-2026"
 **`POST /api/control/restart`**
 
 ```bash
-curl -X POST "http://localhost:5001/api/control/restart?token=wechatbot-api-test-2026"
+curl -X POST "http://localhost:5001/api/control/restart?token=YOUR_API_TOKEN"
 ```
 
 ### 6.2 停止 Bot
@@ -400,7 +400,7 @@ curl -X POST "http://localhost:5001/api/control/restart?token=wechatbot-api-test
 **`POST /api/control/stop`**
 
 ```bash
-curl -X POST "http://localhost:5001/api/control/stop?token=wechatbot-api-test-2026"
+curl -X POST "http://localhost:5001/api/control/stop?token=YOUR_API_TOKEN"
 ```
 
 ### 6.3 清除对话上下文

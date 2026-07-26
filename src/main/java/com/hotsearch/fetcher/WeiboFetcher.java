@@ -20,25 +20,26 @@ import java.util.List;
 public class WeiboFetcher {
 
     private static final Logger log = LoggerFactory.getLogger(WeiboFetcher.class);
-    private static final String WEIBU_HOT_URL = "https://weibo.com/hot/search";
+    private static final String WEIBO_HOT_URL = "https://weibo.com/hot/search";
     private static final String AJAX_URL = "https://weibo.com/ajax/side/hotSearch";
 
-    @Value("${app.fetcher.user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36}")
-    private String userAgent;
-
-    @Value("${app.fetcher.timeout-seconds:15}")
-    private int timeoutSeconds;
-
-    @Value("${app.fetcher.cookie:}")
-    private String cookie;
-
-    @Value("${app.fetcher.mock-enabled:false}")
-    private boolean mockEnabled;
-
     private final ObjectMapper objectMapper;
+    private final String userAgent;
+    private final int timeoutSeconds;
+    private final String cookie;
+    private final boolean mockEnabled;
 
-    public WeiboFetcher(ObjectMapper objectMapper) {
+    public WeiboFetcher(
+            ObjectMapper objectMapper,
+            @Value("${app.fetcher.user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36}") String userAgent,
+            @Value("${app.fetcher.timeout-seconds:15}") int timeoutSeconds,
+            @Value("${app.fetcher.cookie:}") String cookie,
+            @Value("${app.fetcher.mock-enabled:false}") boolean mockEnabled) {
         this.objectMapper = objectMapper;
+        this.userAgent = userAgent;
+        this.timeoutSeconds = timeoutSeconds;
+        this.cookie = cookie;
+        this.mockEnabled = mockEnabled;
     }
 
     public List<HotSearchItem> fetch() {
@@ -125,7 +126,7 @@ public class WeiboFetcher {
     }
 
     private List<HotSearchItem> fetchViaHtml() throws Exception {
-        Document doc = buildConnection(WEIBU_HOT_URL)
+        Document doc = buildConnection(WEIBO_HOT_URL)
                 .get();
 
         // Try to extract from script tags or HTML elements

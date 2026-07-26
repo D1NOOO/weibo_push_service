@@ -12,7 +12,6 @@ import java.util.Optional;
 public interface HotSearchSnapshotRepository extends JpaRepository<HotSearchSnapshot, Long> {
     Optional<HotSearchSnapshot> findTopByOrderByFetchedAtDesc();
     List<HotSearchSnapshot> findByFetchedAtAfterOrderByFetchedAtDesc(LocalDateTime since);
-    List<HotSearchSnapshot> findTop50ByOrderByFetchedAtDesc();
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("delete from HotSearchSnapshot snapshot where snapshot.fetchedAt < :cutoff")
