@@ -18,4 +18,14 @@ public interface MessageProvider {
     default void send(Channel channel, HotSearchItem primaryItem, List<HotSearchItem> allItems, String target) {
         send(channel, primaryItem, allItems);
     }
+
+    /** Send to a specific target with the subscription rule name as the message title. */
+    default void send(Channel channel, HotSearchItem primaryItem, List<HotSearchItem> allItems,
+                      String target, String messageTitle) {
+        send(channel, primaryItem, allItems, target);
+    }
+
+    static String normalizeTitle(String messageTitle) {
+        return messageTitle == null ? "" : messageTitle.trim();
+    }
 }

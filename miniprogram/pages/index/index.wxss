@@ -1,0 +1,80 @@
+.block-btn {
+  width: 100%;
+}
+
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.hot-item {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  padding: 18rpx 0;
+  border-bottom: 1rpx solid #f2f3f5;
+}
+
+.hot-item:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.hot-rank {
+  width: 44rpx;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 28rpx;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.hot-rank-top {
+  color: #dc2626;
+}
+
+.hot-keyword {
+  flex: 1;
+  min-width: 0;
+  font-size: 28rpx;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hot-value {
+  color: #9ca3af;
+  font-size: 24rpx;
+  flex-shrink: 0;
+}
+
+.tool-grid {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.tool-item {
+  width: 25%;
+  padding: 16rpx 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.tool-icon {
+  width: 84rpx;
+  height: 84rpx;
+  border-radius: 24rpx;
+  background: #f3f4f6;
+  color: #111827;
+  font-size: 34rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tool-name {
+  font-size: 24rpx;
+  color: #374151;
+}

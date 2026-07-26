@@ -1,0 +1,45 @@
+<view class="page">
+  <view class="tab-bar">
+    <view
+      wx:for="{{tabs}}"
+      wx:key="key"
+      class="tab {{activeTab === item.key ? 'tab-active' : ''}}"
+      data-key="{{item.key}}"
+      bindtap="switchTab"
+    >{{item.text}}</view>
+  </view>
+
+  <view class="section stat-grid" wx:if="{{summary}}">
+    <view class="stat-card">
+      <view class="stat-value">{{summary.todayNew}}</view>
+      <view class="stat-label">今日新增</view>
+    </view>
+    <view class="stat-card">
+      <view class="stat-value">{{summary.activeCount}}</view>
+      <view class="stat-label">观察中</view>
+    </view>
+    <view class="stat-card">
+      <view class="stat-value">{{summary.total}}</view>
+      <view class="stat-label">7 天事件</view>
+    </view>
+  </view>
+
+  <view class="panel">
+    <block wx:if="{{items.length}}">
+      <view class="list-item" wx:for="{{items}}" wx:key="id">
+        <view class="row">
+          <view class="grow" data-keyword="{{item.keyword}}" bindtap="goTrend">
+            <view class="kw">{{item.keyword}}<text wx:if="{{item.latestLabel}}" class="label-tag label-{{item.labelClass}}">{{item.latestLabel}}</text><text class="trend-link">趋势 ›</text></view>
+            <view class="meta">{{item.subscriptionName || "订阅已删除"}}<text wx:if="{{item.reasonText}}"> · {{item.reasonText}}</text></view>
+            <view class="meta">当前第{{item.latestRank || "-"}}名（最高第{{item.bestRank || "-"}}名）· 热度 {{item.hotText}}（峰值 {{item.maxHotText}}）</view>
+            <view class="meta">首次 {{item.firstSeenText}} · 最近 {{item.lastSeenText}} · 观察 {{item.observedCount}} 次</view>
+            <view class="meta warn-text" wx:if="{{item.deliveryError}}">{{item.deliveryError}}</view>
+          </view>
+          <view class="badge badge-{{item.statusType}}">{{item.statusText}}</view>
+        </view>
+      </view>
+    </block>
+    <view wx:elif="{{loaded}}" class="empty">近 7 天暂无命中记录。创建订阅后等待热搜匹配。</view>
+    <view wx:else class="empty">加载中…</view>
+  </view>
+</view>

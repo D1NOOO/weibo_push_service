@@ -1,0 +1,50 @@
+<view class="page">
+  <view class="section panel">
+    <view class="field" style="margin-bottom: 16rpx;">
+      <input class="input" value="{{keyword}}" placeholder="输入关键词，查询榜单排名历史" bindinput="onKeywordInput" confirm-type="search" bindconfirm="query" />
+    </view>
+    <view class="row">
+      <view class="tab-bar" style="margin-bottom: 0;">
+        <view
+          wx:for="{{hourOptions}}"
+          wx:key="key"
+          class="tab {{hours === item.key ? 'tab-active' : ''}}"
+          data-key="{{item.key}}"
+          bindtap="switchHours"
+        >{{item.text}}</view>
+      </view>
+      <button class="button primary" size="mini" bindtap="query" disabled="{{loading}}">{{loading ? "查询中" : "查询"}}</button>
+    </view>
+  </view>
+
+  <view class="section stat-grid" wx:if="{{items.length}}">
+    <view class="stat-card">
+      <view class="stat-value">{{bestRank || "-"}}</view>
+      <view class="stat-label">最高排名</view>
+    </view>
+    <view class="stat-card">
+      <view class="stat-value">{{latest ? latest.rank : "-"}}</view>
+      <view class="stat-label">最近排名</view>
+    </view>
+    <view class="stat-card">
+      <view class="stat-value">{{items.length}}</view>
+      <view class="stat-label">在榜快照</view>
+    </view>
+  </view>
+
+  <view class="panel">
+    <block wx:if="{{items.length}}">
+      <view class="list-item" wx:for="{{items}}" wx:key="fetchedAt">
+        <view class="row">
+          <view class="grow">
+            <view>第 {{item.rank}} 名<text wx:if="{{item.label}}" class="label-tag label-{{item.labelClass}}">{{item.label}}</text></view>
+            <view class="meta">{{item.timeText}}</view>
+          </view>
+          <view class="meta">{{item.hotText}}</view>
+        </view>
+      </view>
+    </block>
+    <view wx:elif="{{queried}}" class="empty">该时间段内此关键词未上榜。</view>
+    <view wx:else class="empty">输入关键词查询排名趋势，数据来自热搜历史快照。</view>
+  </view>
+</view>

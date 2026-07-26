@@ -36,6 +36,22 @@ public class SubscriptionController {
         return ResponseEntity.ok(subscriptionService.listByUser(getUserId(authHeader)));
     }
 
+    @PostMapping("/preview")
+    @Operation(summary = "订阅规则预览", description = "用当前最新热搜试跑规则，返回可命中的话题，不创建订阅")
+    public ResponseEntity<com.hotsearch.dto.SubscriptionPreviewResponse> preview(
+            @RequestHeader("Authorization") String authHeader,
+            @RequestBody SubscriptionRequest req) {
+        getUserId(authHeader);
+        return ResponseEntity.ok(subscriptionService.preview(req));
+    }
+
+    @GetMapping("/history")
+    @Operation(summary = "获取已过期订阅列表")
+    public ResponseEntity<List<SubscriptionResponse>> history(
+            @RequestHeader("Authorization") String authHeader) {
+        return ResponseEntity.ok(subscriptionService.listExpiredByUser(getUserId(authHeader)));
+    }
+
     @GetMapping("/{id}")
     @Operation(summary = "获取单个订阅")
     public ResponseEntity<SubscriptionResponse> getById(

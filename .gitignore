@@ -28,3 +28,9 @@ mvnw.cmd
 # Env
 .env
 .env.local
+
+# Reference copy of the upstream project (contains .env and runtime data)
+referer/
+
+# WeChat DevTools local state
+project.private.config.json

@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "users")
+@Table(name = "users", indexes = @Index(name = "idx_users_openid", columnList = "openid", unique = true))
 public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -24,6 +24,21 @@ public class User {
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
+
+    @Column(name = "openid")
+    private String openid;
+
+    @Column(name = "unionid")
+    private String unionid;
+
+    @Column(name = "nickname")
+    private String nickname;
+
+    @Column(name = "avatar", length = 1024)
+    private String avatar;
+
+    @Column(name = "last_login_at")
+    private LocalDateTime lastLoginAt;
 
     public User() {
         this.createdAt = LocalDateTime.now();
@@ -48,4 +63,14 @@ public class User {
     public void setMustChangePassword(Boolean mustChangePassword) { this.mustChangePassword = mustChangePassword; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public String getOpenid() { return openid; }
+    public void setOpenid(String openid) { this.openid = openid; }
+    public String getUnionid() { return unionid; }
+    public void setUnionid(String unionid) { this.unionid = unionid; }
+    public String getNickname() { return nickname; }
+    public void setNickname(String nickname) { this.nickname = nickname; }
+    public String getAvatar() { return avatar; }
+    public void setAvatar(String avatar) { this.avatar = avatar; }
+    public LocalDateTime getLastLoginAt() { return lastLoginAt; }
+    public void setLastLoginAt(LocalDateTime lastLoginAt) { this.lastLoginAt = lastLoginAt; }
 }

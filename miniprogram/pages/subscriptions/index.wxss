@@ -1,0 +1,13 @@
+.block-btn {
+  width: 100%;
+}
+
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.sub-name {
+  font-size: 30rpx;
+  font-weight: 500;
+}

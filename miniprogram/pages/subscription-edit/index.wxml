@@ -1,0 +1,79 @@
+<view class="page">
+  <view class="panel">
+    <view class="field">
+      <label class="label">订阅名称</label>
+      <input class="input" value="{{form.name}}" placeholder="例如：品牌舆情" data-field="name" bindinput="onInput" />
+    </view>
+
+    <view class="field">
+      <label class="label">关键词（留空匹配全部热搜）</label>
+      <input class="input" value="{{form.keywords}}" placeholder="多个用逗号分隔，支持 prefix:/regex:" data-field="keywords" bindinput="onInput" />
+    </view>
+
+    <view class="field">
+      <label class="label">排除词</label>
+      <input class="input" value="{{form.excludeKeywords}}" placeholder="多个排除词用逗号分隔" data-field="excludeKeywords" bindinput="onInput" />
+    </view>
+
+    <view class="field">
+      <label class="label">标签过滤（不选表示不限）</label>
+      <view class="chip-group">
+        <view
+          wx:for="{{labelOptions}}"
+          wx:key="label"
+          class="chip {{item.selected ? 'chip-active' : ''}}"
+          data-index="{{index}}"
+          bindtap="toggleLabel"
+        >{{item.label}}</view>
+      </view>
+    </view>
+
+    <view class="field">
+      <label class="label">最低热度（可选）</label>
+      <input class="input" type="number" value="{{form.minHotValue}}" placeholder="低于该热度不提醒" data-field="minHotValue" bindinput="onInput" />
+    </view>
+
+    <view class="field">
+      <label class="label">通知通道（不选表示全部启用通道）</label>
+      <view class="chip-group" wx:if="{{channels.length}}">
+        <view
+          wx:for="{{channels}}"
+          wx:key="id"
+          class="chip {{item.selected ? 'chip-active' : ''}}"
+          data-index="{{index}}"
+          bindtap="toggleChannel"
+        >{{item.name}}</view>
+      </view>
+      <view wx:else class="meta">暂无通道。在「我的」页开启提醒后自动创建小程序通知通道；外部通道请在 Web 管理端配置。</view>
+    </view>
+
+    <view class="field" wx:if="{{id}}">
+      <view class="row">
+        <label class="label" style="margin-bottom: 0;">启用该订阅</label>
+        <switch checked="{{form.enabled}}" color="#111827" bindchange="onEnabledChange" />
+      </view>
+    </view>
+
+    <button class="button secondary block-btn" bindtap="previewRule" disabled="{{previewing}}">{{previewing ? "预览中…" : "预览命中"}}</button>
+    <button class="button primary block-btn" bindtap="submit" disabled="{{submitting}}">{{id ? "保存修改" : "保存订阅"}}</button>
+    <button class="button danger-btn block-btn" wx:if="{{id}}" bindtap="remove">删除订阅</button>
+  </view>
+
+  <view class="panel preview-panel" wx:if="{{preview}}">
+    <view class="row">
+      <view class="section-title" style="margin-bottom: 0;">当前热搜可命中 {{preview.matchedCount}} 条</view>
+      <view class="meta" wx:if="{{preview.fetchedAtText}}">{{preview.fetchedAtText}}抓取</view>
+    </view>
+    <block wx:if="{{preview.matched.length}}">
+      <view class="list-item" wx:for="{{preview.matched}}" wx:key="rank">
+        <view class="row">
+          <view class="grow">
+            <view>{{item.rank}}. {{item.keyword}}<text wx:if="{{item.label}}" class="label-tag label-{{item.labelClass}}">{{item.label}}</text></view>
+          </view>
+          <view class="meta">{{item.hotText}}</view>
+        </view>
+      </view>
+    </block>
+    <view wx:else class="empty">当前热搜没有可命中的话题，规则保存后会持续匹配新热搜。</view>
+  </view>
+</view>

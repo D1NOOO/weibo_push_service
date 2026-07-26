@@ -1,0 +1,87 @@
+<view class="page">
+  <view class="section panel">
+    <view class="title">微博热搜提醒</view>
+    <view class="subtitle">订阅关键词，在热搜上榜、升温或进入高排名时收到提醒。</view>
+  </view>
+
+  <view class="section panel" wx:if="{{!loggedIn}}">
+    <view class="row">
+      <view>
+        <view>未连接主服务</view>
+        <view class="meta">{{loginError || "正在登录…"}}</view>
+      </view>
+      <button class="button primary" size="mini" bindtap="retryLogin">重新登录</button>
+    </view>
+  </view>
+
+  <block wx:if="{{loggedIn}}">
+    <view class="section stat-grid">
+      <view class="stat-card" bindtap="goMatches">
+        <view class="stat-value">{{summary ? summary.todayNew : "-"}}</view>
+        <view class="stat-label">今日命中</view>
+      </view>
+      <view class="stat-card" bindtap="goMatches">
+        <view class="stat-value">{{summary ? summary.activeCount : "-"}}</view>
+        <view class="stat-label">观察中</view>
+      </view>
+      <view class="stat-card" bindtap="goProfile">
+        <view class="stat-value">{{quota ? quota.availableCount : "-"}}</view>
+        <view class="stat-label">提醒额度</view>
+      </view>
+    </view>
+
+    <view class="section panel" wx:if="{{quota && quota.availableCount === 0}}">
+      <view class="row">
+        <view>
+          <view>提醒额度已用完</view>
+          <view class="meta">授权订阅消息后才能收到微信提醒</view>
+        </view>
+        <button class="button primary" size="mini" bindtap="goProfile">去开启</button>
+      </view>
+    </view>
+
+    <view class="section panel" wx:if="{{summary && summary.items.length}}">
+      <view class="row">
+        <view class="section-title">最近命中</view>
+        <view class="meta" bindtap="goMatches">全部 ›</view>
+      </view>
+      <view class="list-item" wx:for="{{summary.items}}" wx:key="id">
+        <view class="row">
+          <view class="grow">
+            <view>{{item.keyword}}<text wx:if="{{item.latestLabel}}" class="label-tag label-{{item.labelClass}}">{{item.latestLabel}}</text></view>
+            <view class="meta">{{item.subscriptionName}} · 第{{item.latestRank || "-"}}名 · {{item.lastSeenText}}</view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="section panel">
+      <view class="row">
+        <view class="section-title">当前热搜</view>
+        <view class="meta" wx:if="{{hotFetchedAt}}">{{hotFetchedAt}}抓取</view>
+      </view>
+      <block wx:if="{{hotItems.length}}">
+        <view class="hot-item" wx:for="{{hotItems}}" wx:key="rank">
+          <view class="hot-rank {{item.topRank ? 'hot-rank-top' : ''}}">{{item.rank}}</view>
+          <view class="hot-keyword">{{item.keyword}}<text wx:if="{{item.label}}" class="label-tag label-{{item.labelClass}}">{{item.label}}</text></view>
+          <view class="hot-value">{{item.hotText}}</view>
+        </view>
+      </block>
+      <view wx:else class="empty">{{loading ? "加载中…" : "暂无热搜数据，等待首次抓取"}}</view>
+    </view>
+
+    <view class="section">
+      <button class="button primary block-btn" bindtap="goCreate">新建热搜订阅</button>
+    </view>
+  </block>
+
+  <view class="section panel">
+    <view class="section-title">工具广场</view>
+    <view class="tool-grid">
+      <view class="tool-item" wx:for="{{tools}}" wx:key="key" data-key="{{item.key}}" bindtap="onToolTap">
+        <view class="tool-icon">{{item.icon}}</view>
+        <view class="tool-name">{{item.name}}</view>
+      </view>
+    </view>
+  </view>
+</view>

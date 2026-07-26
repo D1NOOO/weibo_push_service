@@ -8,15 +8,11 @@ import com.hotsearch.fetcher.WeiboFetcher;
 import com.hotsearch.matcher.SubscriptionMatcher;
 import com.hotsearch.matcher.SubscriptionMatcher.MatchResult;
 import com.hotsearch.provider.MessageProvider;
+import com.hotsearch.provider.WxSubscribeMessageProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.PostConstruct;
-import java.io.*;
-import java.nio.file.*;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -36,66 +32,25 @@ public class PipelineService {
     private final SubscriptionMatcher matcher;
     private final DeliveryService deliveryService;
     private final Map<String, MessageProvider> providerMap;
+    private final ApplicationConfigService configService;
+    private final SinkShortLinkService sinkShortLinkService;
+    private final MatchEventService matchEventService;
+    private final WxNotificationService wxNotificationService;
 
-    private static final String CONFIG_FILE = "data/dedupe-config.properties";
-
-    @Value("${app.dedupe.window-hours:6}")
-    private volatile int dedupeWindowHours;
-
-    public int getDedupeWindowHours() { return dedupeWindowHours; }
+    public int getDedupeWindowHours() { return configService.getDedupeWindowHours(); }
 
     public void setDedupeWindowHours(int hours) {
-        this.dedupeWindowHours = hours;
-        persistDedupeWindowHours(hours);
-    }
-
-    @PostConstruct
-    private void loadPersistedConfig() {
-        try {
-            Path path = Paths.get(CONFIG_FILE);
-            if (Files.exists(path)) {
-                Properties props = new Properties();
-                try (InputStream in = Files.newInputStream(path)) {
-                    props.load(in);
-                }
-                String val = props.getProperty("dedupe.window-hours");
-                if (val != null) {
-                    int persisted = Integer.parseInt(val);
-                    if (persisted >= 1 && persisted <= 168) {
-                        this.dedupeWindowHours = persisted;
-                        log.info("从持久化配置加载去重窗口: {} 小时", persisted);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.warn("加载持久化配置失败，使用默认值: {} 小时", dedupeWindowHours, e);
-        }
-    }
-
-    private void persistDedupeWindowHours(int hours) {
-        try {
-            Path path = Paths.get(CONFIG_FILE);
-            Files.createDirectories(path.getParent());
-            Properties props = new Properties();
-            // Load existing props first in case we add more later
-            if (Files.exists(path)) {
-                try (InputStream in = Files.newInputStream(path)) {
-                    props.load(in);
-                }
-            }
-            props.setProperty("dedupe.window-hours", String.valueOf(hours));
-            try (OutputStream out = Files.newOutputStream(path)) {
-                props.store(out, "Dedupe config - persists across restarts");
-            }
-        } catch (Exception e) {
-            log.error("持久化去重配置失败", e);
-        }
+        configService.setDedupeWindowHours(hours);
     }
 
     public PipelineService(WeiboFetcher weiboFetcher, HotSearchService hotSearchService,
                            SubscriptionService subscriptionService, ChannelService channelService,
                            SubscriptionMatcher matcher, DeliveryService deliveryService,
-                           Map<String, MessageProvider> providerMap) {
+                           Map<String, MessageProvider> providerMap,
+                           ApplicationConfigService configService,
+                           SinkShortLinkService sinkShortLinkService,
+                           MatchEventService matchEventService,
+                           WxNotificationService wxNotificationService) {
         this.weiboFetcher = weiboFetcher;
         this.hotSearchService = hotSearchService;
         this.subscriptionService = subscriptionService;
@@ -103,9 +58,12 @@ public class PipelineService {
         this.matcher = matcher;
         this.deliveryService = deliveryService;
         this.providerMap = providerMap;
+        this.configService = configService;
+        this.sinkShortLinkService = sinkShortLinkService;
+        this.matchEventService = matchEventService;
+        this.wxNotificationService = wxNotificationService;
     }
 
-    @Scheduled(cron = "${app.schedule.cron:0 0 * * * *}")
     public void scheduledRun() {
         log.info("定时任务触发：开始执行热搜推送管线");
         runPipeline();
@@ -141,7 +99,7 @@ public class PipelineService {
 
         // 3. Group by subscription, dedupe, then deliver one message per sub-channel
         List<Channel> channels = channelService.listAllEnabled();
-        LocalDateTime dedupeSince = LocalDateTime.now().minusHours(dedupeWindowHours);
+        LocalDateTime dedupeSince = LocalDateTime.now().minusHours(configService.getDedupeWindowHours());
 
         Map<Long, List<MatchResult>> matchesBySub = matches.stream()
                 .collect(Collectors.groupingBy(m -> m.subscription().getId(), LinkedHashMap::new, Collectors.toList()));
@@ -149,11 +107,24 @@ public class PipelineService {
         for (var entry : matchesBySub.entrySet()) {
             List<MatchResult> subMatches = entry.getValue();
             Subscription sub = subMatches.get(0).subscription();
+            if (!sub.isEffectiveAtUtc(LocalDateTime.now(java.time.ZoneOffset.UTC))) continue;
+
+            // 命中事件聚合：活跃窗口内 upsert，只在事件变化时产生通知原因（降噪）
+            List<MatchEventService.RecordResult> recordedEvents = new ArrayList<>();
+            for (MatchResult m : subMatches) {
+                try {
+                    recordedEvents.add(matchEventService.record(sub, m.item()));
+                } catch (Exception e) {
+                    log.error("记录命中事件失败: subId={}, keyword={}", sub.getId(), m.item().keyword(), e);
+                }
+            }
 
             // Determine which channels to deliver to for this subscription
             List<Long> subChannelIds = sub.getChannelIds();
             for (Channel channel : channels) {
                 if (!channel.getUserId().equals(sub.getUserId())) continue;
+                // 小程序订阅消息通道不走通用推送循环，只走事件降噪路径（额度稀缺）
+                if (WxSubscribeMessageProvider.PROVIDER_NAME.equals(channel.getProvider())) continue;
                 // If subscription has specific channels, only send to those
                 if (!subChannelIds.isEmpty() && !subChannelIds.contains(channel.getId())) continue;
 
@@ -170,6 +141,7 @@ public class PipelineService {
                 List<String> targets = provider.getTargets(channel);
 
                 for (String target : targets) {
+                    if (!sub.isEffectiveAtUtc(LocalDateTime.now(java.time.ZoneOffset.UTC))) continue;
                     // Dedupe per target
                     List<MatchResult> toDeliver = new ArrayList<>();
                     for (MatchResult m : subMatches) {
@@ -179,19 +151,20 @@ public class PipelineService {
                     }
                     if (toDeliver.isEmpty()) continue;
 
-                    List<HotSearchItem> allItems = toDeliver.stream().map(MatchResult::item).toList();
-                    HotSearchItem primaryItem = toDeliver.get(0).item();
+                    List<HotSearchItem> originalItems = toDeliver.stream().map(MatchResult::item).toList();
+                    List<HotSearchItem> allItems = sinkShortLinkService.shortenItems(channel, originalItems);
+                    HotSearchItem primaryItem = allItems.get(0);
                     String batchId = UUID.randomUUID().toString();
 
                     try {
-                        provider.send(channel, primaryItem, allItems, target);
+                        provider.send(channel, primaryItem, allItems, target, sub.getName());
                         for (MatchResult m : toDeliver) {
                             deliveryService.save(buildLog(m, channel, target, "SUCCESS", null, batchId));
                         }
                     } catch (Exception e) {
                         log.error("推送失败: subId={}, channel={}, target={}", sub.getId(), channel.getId(), target, e);
                         if (isRateLimited(e)) {
-                            if (retryWithBackoff(provider, channel, primaryItem, allItems, target)) {
+                            if (retryWithBackoff(provider, channel, primaryItem, allItems, target, sub.getName())) {
                                 log.info("退避重试成功: keyword={}, channel={}", primaryItem.keyword(), channel.getId());
                                 for (MatchResult m : toDeliver) {
                                     deliveryService.save(buildLog(m, channel, target, "SUCCESS", null, batchId));
@@ -205,12 +178,20 @@ public class PipelineService {
                     }
                 }
             }
+
+            // 微信小程序订阅消息：只通知有触发原因（首次命中/标签升级/进前排/热度激增）的事件
+            try {
+                wxNotificationService.notifyForSubscription(sub, channels, recordedEvents);
+            } catch (Exception e) {
+                log.error("微信订阅消息通知路径异常: subId={}", sub.getId(), e);
+            }
         }
         log.info("管线执行完成");
     }
 
     private DeliveryLog buildLog(MatchResult match, Channel channel, String target, String status, String error, String batchId) {
         DeliveryLog log = new DeliveryLog();
+        log.setUserId(match.subscription().getUserId());
         log.setSubscriptionId(match.subscription().getId());
         log.setChannelId(channel.getId());
         log.setBatchId(batchId);
@@ -232,7 +213,7 @@ public class PipelineService {
 
     private boolean retryWithBackoff(MessageProvider provider, Channel channel,
                                       HotSearchItem primaryItem, List<HotSearchItem> allItems,
-                                      String target) {
+                                      String target, String messageTitle) {
         int maxRetries = 3;
         int delaySeconds = 12;
         for (int i = 0; i < maxRetries; i++) {
@@ -240,7 +221,7 @@ public class PipelineService {
                 log.info("退避重试 {}/{}: {}秒后重试 channel={} keyword={}",
                         i + 1, maxRetries, delaySeconds, channel.getId(), primaryItem.keyword());
                 Thread.sleep(delaySeconds * 1000L);
-                provider.send(channel, primaryItem, allItems, target);
+                provider.send(channel, primaryItem, allItems, target, messageTitle);
                 return true;
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();

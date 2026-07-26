@@ -439,3 +439,125 @@ notification_logs
 不要一开始做大而全工具平台。
 
 先把“微博热搜提醒”打透，再用工具广场承载扩展入口。
+
+## 15. 沟通结论：数据库选型与小程序适配开发计划
+
+### 15.1 SQLite 是否需要换成 MySQL
+
+当前仓库仍然使用 SQLite：
+
+```text
+spring.datasource.url=jdbc:sqlite:data/hotsearch.db
+Hibernate dialect=SQLiteDialect
+依赖=sqlite-jdbc
+```
+
+小程序适配进入真实多用户阶段后，建议将线上主库从 SQLite 迁移到 MySQL。
+
+结论：
+
+- SQLite 可以继续保留为本地开发、单机演示和快速验证环境。
+- MySQL 应作为小程序线上环境的主数据库。
+- 不建议把核心业务数据放到微信云函数或云数据库里，主服务仍然是核心业务后端。
+
+迁移原因：
+
+- 小程序会引入真实用户体系，需要稳定支持多用户并发访问。
+- 订阅规则、通知额度、命中事件、通知日志会被定时任务和用户操作同时读写。
+- `match_events` 需要依赖索引和 upsert 保证事件聚合正确性。
+- 后续需要更可靠的备份、迁移、监控和线上运维能力。
+- MySQL 更适合生产环境下的分页查询、条件过滤、唯一约束和故障恢复。
+
+建议落地方式：
+
+- 新增 `dev` profile 使用 SQLite，方便本地启动。
+- 新增 `prod` profile 使用 MySQL，作为线上部署默认方案。
+- 引入 Flyway 或 Liquibase 管理表结构迁移，不再依赖 `ddl-auto=update` 作为生产建表方式。
+- 将生产环境 `spring.jpa.hibernate.ddl-auto` 调整为 `validate`。
+- 在 `docker-compose.yml` 中增加 MySQL 服务，或接入外部托管 MySQL。
+
+### 15.2 微信小程序适配开发计划
+
+P0 目标：先打通“微信登录 -> 创建订阅 -> 授权订阅消息 -> 命中聚合 -> 通知 -> 小程序查看命中记录”的闭环。
+
+阶段 1：数据库与用户体系
+
+- 增加 MySQL 生产配置与数据迁移脚本。
+- 扩展 `users` 表，支持 `openid`、`unionid`、`nickname`、`avatar`、`lastLoginAt`。
+- 保留现有账号密码登录能力，避免影响当前 Web 管理端。
+- 新增微信登录接口：小程序提交 `wx.login` code，主服务调用微信 `code2session`，返回主服务 JWT。
+
+阶段 2：用户数据隔离
+
+- 确认 `subscriptions`、`channels` 已按 `userId` 隔离。
+- 为 `delivery_logs` 补充 `userId`，避免后续按用户查询时只能通过订阅反查。
+- 所有小程序接口必须从 JWT 中解析当前用户，不允许前端传入任意 `userId`。
+- 补充必要索引：`subscriptions.user_id`、`channels.user_id`、`delivery_logs.user_id`。
+
+阶段 3：命中事件聚合
+
+- 新增 `match_events` 表，MVP 暂不强制实现 `match_observations`。
+- 主服务匹配到热搜后，按 `userId + subscriptionId + normalizedKeyword + activeWindow` 聚合。
+- 首次命中创建事件，重复命中更新 `lastSeenAt`、`observedCount`、`bestRank`、`latestRank`、`maxHotValue`、`latestHotValue`。
+- 通知策略基于事件变化，不基于每次抓取观测。
+
+阶段 4：订阅消息额度与微信通知
+
+- 新增 `notification_quota` 表，记录用户对模板消息的可发送额度。
+- 小程序端调用 `wx.requestSubscribeMessage` 后，将授权结果回传主服务。
+- 新增微信云函数 `sendSubscribeMessage`，只负责调用微信订阅消息 API。
+- 主服务调用云函数时必须带签名：shared secret、timestamp、nonce、signature。
+- 发送成功后扣减额度，并记录通知日志。
+
+阶段 5：小程序最小页面
+
+- 登录态初始化：启动时静默登录，失败时引导重新授权。
+- 首页：展示微博热搜提醒入口、提醒额度、最近命中。
+- 订阅列表：展示启用状态、关键词、命中数量、最近命中时间。
+- 新建/编辑订阅：关键词、排除词、标签过滤、最低热度、通知渠道。
+- 命中列表：展示话题、排名、热度、标签、首次命中、最近观察、通知状态。
+- 设置页：订阅消息授权入口、外部通知渠道管理入口。
+
+阶段 6：工具广场
+
+- 工具广场后置到 P1。
+- 先放“微博热搜提醒”作为核心工具。
+- 计算器、天气、汇率、第三方小程序跳转作为轻量入口，不影响核心闭环。
+
+### 15.3 推荐近期开发顺序
+
+1. 添加 MySQL profile、迁移依赖和初始化 schema。
+2. 扩展用户表并实现微信登录接口。
+3. 补齐用户隔离字段和索引。
+4. 新增 `match_events` 表与聚合逻辑。
+5. 新增订阅消息额度表和授权回传接口。
+6. 实现云函数发送订阅消息与主服务签名调用。
+7. 开发小程序 P0 页面。
+8. 联调完整闭环并补充接口测试。
+
+### 15.4 当前仓库结构落地
+
+已在 `microprogram` 分支采用单仓库方式承载小程序适配：
+
+```text
+weibo_wx_microprogram/
+- src/                         Spring Boot 主服务
+- miniprogram/                 微信小程序端
+- cloudfunctions/
+  - sendSubscribeMessage/      微信订阅消息发送云函数
+- project.config.json          微信开发者工具项目配置
+- product-plan.md              产品和技术规划
+```
+
+当前实现范围（P0 闭环已完成，2026-07-27）：
+
+- 后端：`/api/auth/wx-login`（code2session + 用户 upsert + JWT）、`/api/auth/me`、`/api/match-events`（活跃窗口聚合 + 今日/活跃统计）、`/api/wx/subscribe-message/{quota,grant}` 全部实现。
+- 命中事件降噪：首次命中 / 标签升级（爆·沸）/ 排名进入前 N / 热度激增四类原因触发微信通知，普通重复观测不通知；外部通道保持原有去重窗口行为。
+- 额度管理：grant +1、发送消耗、失败回补、43101 清零；首次授权自动创建 `wxsubscribe` 通道。
+- 云函数 `sendSubscribeMessage`：HMAC 原始串验签 + 时间窗 + nonce 防重放，支持 HTTP 访问服务与 invokecloudfunction 两种调用方式（主服务 `WX_CLOUD_INVOKE_MODE` 切换）。
+- 小程序端五个页面完整实现：静默登录、401 自动重登、订阅 CRUD、命中筛选、订阅消息授权与通道测试。
+- 生产部署：`prod` profile（MySQL）+ docker-compose.prod.yml；开发默认仍 SQLite。
+
+尚待线上联调的事项：真实 AppID 下的 code2session、订阅消息模板字段映射（`app.wx.subscribe.field-mapping`）、云函数 HTTP 访问服务 URL 配置。进展详见 handoff.md。
+
+短期继续保持单仓库开发，等核心闭环稳定后再评估是否拆分小程序独立仓库。

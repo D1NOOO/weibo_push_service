@@ -10,7 +10,16 @@ const DESIGN = {
     purpleNeon: '#6e56cf',
     accent: '#186bff',
     textDark: '#151924',
-    textLight: '#8b94a4'
+    textLight: '#8b94a4',
+    labelPalette: {
+        burst: '#b4232e',
+        hot: '#c9822a',
+        boil: '#6e56cf',
+        fresh: '#16a36f',
+        other: '#3f6f8f',
+        ad: '#9a7a50',
+        none: '#9aa1ac'
+    }
 };
 
 // ==================== API Layer ====================
@@ -69,6 +78,9 @@ class AppState {
     constructor() {
         this.config = { dedupeHours: 6 };
         this.allItems = [];
+        this.hotSearchFetchedAt = null;
+        this.hotSearchCache = { data: null, loadedAt: 0 };
+        this.channelsCache = { data: null, loadedAt: 0 };
         this.theme = localStorage.getItem('theme') || 'light';
         this.currentTab = 'hotsearch';
         this.autoRefresh = null;
@@ -86,14 +98,14 @@ class AppState {
     toggleTheme() {
         const newTheme = this.theme === 'light' ? 'dark' : 'light';
         this.setTheme(newTheme);
-        document.getElementById('btn-theme').textContent = newTheme === 'light' ? '🌙' : '☀️';
+        document.getElementById('btn-theme').textContent = newTheme === 'light' ? '深色模式' : '浅色模式';
     }
 
     startAutoRefresh() {
         if (this.autoRefresh) return;
         this.autoRefresh = setInterval(() => {
             if (document.getElementById('tab-hotsearch').classList.contains('active')) {
-                loadHotSearch();
+                loadHotSearch({ force: true, showSkeleton: false });
             }
         }, 30000); // 30 seconds
     }
@@ -116,8 +128,47 @@ const UTILS = {
         div.textContent = s; 
         return div.innerHTML; 
     },
-    splitList(s) { 
-        return s ? s.split(/[,，]/).map(x => x.trim()).filter(Boolean) : []; 
+    splitList(s) {
+        if (!s) return [];
+        const parts = [];
+        let current = '';
+        let escapeNext = false;
+        let parenDepth = 0;
+        let bracketDepth = 0;
+        let braceDepth = 0;
+
+        for (const ch of s) {
+            if (escapeNext) {
+                current += ch;
+                escapeNext = false;
+                continue;
+            }
+
+            if (ch === '\\') {
+                current += ch;
+                escapeNext = true;
+                continue;
+            }
+
+            if (ch === '(') parenDepth++;
+            else if (ch === ')' && parenDepth > 0) parenDepth--;
+            else if (ch === '[') bracketDepth++;
+            else if (ch === ']' && bracketDepth > 0) bracketDepth--;
+            else if (ch === '{') braceDepth++;
+            else if (ch === '}' && braceDepth > 0) braceDepth--;
+
+            if ((ch === ',' || ch === '，') && parenDepth === 0 && bracketDepth === 0 && braceDepth === 0) {
+                const value = current.trim();
+                if (value) parts.push(value);
+                current = '';
+            } else {
+                current += ch;
+            }
+        }
+
+        const value = current.trim();
+        if (value) parts.push(value);
+        return parts;
     },
     formatNum(n) { 
         if (n >= 100000) return (n / 10000).toFixed(1) + '万';
@@ -184,12 +235,17 @@ const ChartManager = {
         // Force canvas to respect device pixel ratio for sharp rendering
         Chart.defaults.devicePixelRatio = window.devicePixelRatio || 1;
 
+        const labelCanvas = document.getElementById('chart-labels');
+        const heatCanvas = document.getElementById('chart-heat');
+        Chart.getChart(labelCanvas)?.destroy();
+        Chart.getChart(heatCanvas)?.destroy();
+
         this.labelChart = new Chart(
-            document.getElementById('chart-labels').getContext('2d'),
+            labelCanvas.getContext('2d'),
             this.createLabelChartConfig()
         );
         this.heatChart = new Chart(
-            document.getElementById('chart-heat').getContext('2d'),
+            heatCanvas.getContext('2d'),
             this.createHeatChartConfig()
         );
     },
@@ -201,11 +257,9 @@ const ChartManager = {
                 labels: [],
                 datasets: [{
                     data: [],
-                    backgroundColor: [
-                        DESIGN.orangeCoral, DESIGN.danger, DESIGN.warning,
-                        DESIGN.success, DESIGN.purpleNeon, DESIGN.accent, DESIGN.textLight
-                    ],
-                    borderWidth: 0,
+                    backgroundColor: [],
+                    borderColor: getComputedStyle(document.documentElement).getPropertyValue('--card').trim() || '#ffffff',
+                    borderWidth: 3,
                     borderRadius: 4
                 }]
             },
@@ -233,8 +287,8 @@ const ChartManager = {
                 datasets: [{
                     label: '热度值',
                     data: [],
-                    backgroundColor: DESIGN.purpleNeon,
-                    borderRadius: 6,
+                    backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '#0066cc',
+                    borderRadius: 5,
                     borderWidth: 0
                 }]
             },
@@ -254,11 +308,7 @@ const ChartManager = {
                     x: {
                         grid: { display: false },
                         ticks: {
-                            autoSkip: false,
-                            maxRotation: 45,
-                            minRotation: 0,
-                            font: { size: 11 },
-                            color: getComputedStyle(document.documentElement).getPropertyValue('--text-light')
+                            display: false
                         }
                     },
                     y: {
@@ -279,6 +329,7 @@ const ChartManager = {
 
         this.labelChart.data.labels = data.labels;
         this.labelChart.data.datasets[0].data = data.values;
+        this.labelChart.data.datasets[0].backgroundColor = data.colors || [];
         this.labelChart.update();
     },
 
@@ -291,6 +342,17 @@ const ChartManager = {
     }
 };
 
+window.addEventListener('chartjs-ready', () => {
+    if (ChartManager.labelChart || document.getElementById('dashboard-page').classList.contains('hidden')) {
+        return;
+    }
+    try {
+        ChartManager.initCharts();
+        if (State.allItems.length) updateCharts(State.allItems);
+    } catch (e) {
+        console.warn('Chart initialization failed:', e);
+    }
+});
 // ==================== Authentication ====================
 // Login
 document.getElementById('login-form').addEventListener('submit', async (e) => {
@@ -398,70 +460,104 @@ function loadTab(tab) {
 }
 
 // ==================== Hot Search Main Logic ====================
-async function loadHotSearch() {
+async function getHotSearchResult(force = false) {
+    const cacheTtlMs = 30000;
+    const now = Date.now();
+    if (!force && State.hotSearchCache.data && (now - State.hotSearchCache.loadedAt) < cacheTtlMs) {
+        return State.hotSearchCache.data;
+    }
+
+    const result = await API.get('/api/hotsearch');
+    State.hotSearchCache = { data: result, loadedAt: now };
+    return result;
+}
+
+function renderHotSearch(result = null) {
     const container = document.getElementById('hotsearch-list');
-    UTILS.showLoading(container);
-    
-    try {
-        const result = await API.get('/api/hotsearch');
-        let items = Array.isArray(result) ? result : (result.items || []);
-        const fetchedAt = result.fetchedAt || null;
-        // Filter out items without keywords (e.g. topic headers from Weibo API)
-        items = items.filter(item => item.keyword);
-        State.allItems = items;
-        
-        if (!items.length) {
-            container.innerHTML = '<div class="empty"><div class="empty-icon">😴</div><p>暂无热搜数据</p></div>';
-            return;
-        }
-        
-        // Update stats
-        updateStats(items);
-        // Update charts
-        updateCharts(items);
-        
-        // Get search filter
-        const search = document.getElementById('hotsearch-search').value.toLowerCase().trim();
-        const filteredItems = search 
-            ? items.filter(item => item.keyword && item.keyword.toLowerCase().includes(search))
-            : items;
-        
-        if (!filteredItems.length) {
-            container.innerHTML = `<div class="empty"><div class="empty-icon">🔍</div><p>未找到匹配 "${search}" 的热搜</p></div>`;
-            return;
-        }
-        
-        // Render list with skeleton removal animation
-        setTimeout(() => {
-            container.innerHTML = filteredItems.map((item, i) => renderHotItem(item, i)).join('');
-        }, 200);
-        
-        // Show freshness banner
-        if (fetchedAt && document.querySelector('.freshness-banner')) {
-            document.querySelector('.freshness-banner .freshness-time').textContent = UTILS.formatTime(fetchedAt);
-        }
-    } catch (e) {
-        container.innerHTML = '<div class="empty"><div class="empty-icon">️⚠️</div><p>加载失败: ' + UTILS.escape(e.message) + '</p></div>';
-        UTILS.showToast('热搜加载失败', 'error');
+    let items = result ? (Array.isArray(result) ? result : (result.items || [])) : State.allItems;
+    const fetchedAt = result ? (result.fetchedAt || null) : State.hotSearchFetchedAt;
+
+    items = items.filter(item => item.keyword);
+    State.allItems = items;
+    State.hotSearchFetchedAt = fetchedAt;
+
+    if (!items.length) {
+        container.innerHTML = '<div class="empty"><p>暂无热搜数据</p></div>';
+        return;
+    }
+
+    updateStats(items);
+    updateCharts(items);
+    updateTopStory(items[0]);
+
+    const search = document.getElementById('hotsearch-search').value.toLowerCase().trim();
+    const filteredItems = search
+        ? items.filter(item => item.keyword && item.keyword.toLowerCase().includes(search))
+        : items;
+
+    if (!filteredItems.length) {
+        container.innerHTML = `<div class="empty"><div class="empty-icon">—</div><p>未找到匹配 "${UTILS.escape(search)}" 的热搜</p></div>`;
+        return;
+    }
+
+    container.innerHTML = filteredItems.map((item, i) => renderHotItem(item, i)).join('');
+
+    if (fetchedAt && document.querySelector('.freshness-banner')) {
+        document.querySelector('.freshness-banner .freshness-time').textContent = UTILS.formatTime(fetchedAt);
     }
 }
 
+async function loadHotSearch(options = {}) {
+    const container = document.getElementById('hotsearch-list');
+    const force = options.force === true;
+    const showSkeleton = options.showSkeleton !== false;
+
+    if (showSkeleton && !State.allItems.length) {
+        UTILS.showLoading(container);
+    }
+
+    try {
+        const result = await getHotSearchResult(force);
+        renderHotSearch(result);
+    } catch (e) {
+        container.innerHTML = '<div class="empty"><div class="empty-icon">!</div><p>加载失败: ' + UTILS.escape(e.message) + '</p></div>';
+        UTILS.showToast('热搜加载失败', 'error');
+    }
+}
 function renderHotItem(item, i) {
     const rank = item.rank || i + 1;
+    const rankClass = rank >= 1 && rank <= 3
+        ? `podium rank-${rank}`
+        : UTILS.getRankClass(rank);
     return `
         <div class="card hotsearch-card">
-            <span class="hot-rank ${i < 3 ? 'top' : UTILS.getRankClass(rank)}">${rank}</span>
+            <span class="hot-rank ${rankClass}">${rank}</span>
             <div class="hot-info">
                 <div class="hot-keyword">
-                    ${item.url ? `<a href="${UTILS.escape(item.url)}" target="_blank" rel="noopener" class="hot-link">${UTILS.escape(item.keyword)}</a>` : UTILS.escape(item.keyword)}${item.isAd ? ' &nbsp;📌' : ''}
+                    <span class="hot-keyword-text">${item.url ? `<a href="${UTILS.escape(item.url)}" target="_blank" rel="noopener" class="hot-link">${UTILS.escape(item.keyword)}</a>` : UTILS.escape(item.keyword)}${item.isAd ? ' · 广告' : ''}</span>
+                    ${item.label ? `<span class="hot-meta">${UTILS.escape(item.label)}</span>` : ''}
+                    ${item.isAd ? '<span class="hot-meta">广告推广</span>' : ''}
                 </div>
-                <div class="hot-meta">${item.label ? UTILS.escape(item.label) : ''} ${item.isAd ? '广告推广' : ''}</div>
             </div>
-            <button class="btn-trend" onclick="showTrend('${UTILS.escape(item.keyword).replace(/'/g, "\\'")}')" title="查看历史趋势">📈</button>
+            <button class="btn-trend" onclick="showTrend('${UTILS.escape(item.keyword).replace(/'/g, "\\'")}')" title="查看历史趋势">查看趋势</button>
             ${item.label ? `<span class="hot-label ${UTILS.getLabelClass(item.label)}">${UTILS.escape(item.label)}</span>` : ''}
             ${item.hotValue ? `<span class="hot-value ${UTILS.getHeatClass(item.hotValue)}">${UTILS.formatNum(item.hotValue)}</span>` : ''}
         </div>
     `;
+}
+
+function updateTopStory(item) {
+    if (!item) return;
+    const keyword = document.getElementById('top-story-keyword');
+    const heat = document.getElementById('top-story-heat');
+    const status = document.getElementById('top-story-status');
+    const trendButton = document.getElementById('btn-top-story-trend');
+
+    keyword.textContent = item.keyword;
+    heat.textContent = item.hotValue ? UTILS.formatNum(item.hotValue) : '暂无数据';
+    status.textContent = item.label ? `当前排名第 1 位 · ${item.label}` : '当前排名第 1 位';
+    trendButton.disabled = false;
+    trendButton.onclick = () => showTrend(item.keyword);
 }
 
 function updateStats(items) {
@@ -480,6 +576,15 @@ function updateCharts(items) {
     // Label distribution
     const labels = ['爆', '热', '沸', '新', '其他有效', '广告', '无标签'];
     const counts = [0, 0, 0, 0, 0, 0, 0];
+    const colors = [
+        DESIGN.labelPalette.burst,
+        DESIGN.labelPalette.hot,
+        DESIGN.labelPalette.boil,
+        DESIGN.labelPalette.fresh,
+        DESIGN.labelPalette.other,
+        DESIGN.labelPalette.ad,
+        DESIGN.labelPalette.none
+    ];
     items.forEach(item => {
         if (item.label === '爆') counts[0]++;
         else if (item.label === '热') counts[1]++;
@@ -493,9 +598,10 @@ function updateCharts(items) {
     // Only show non-zero labels
     const validLabels = labels.filter((_, i) => counts[i] > 0);
     const validCounts = counts.filter(c => c > 0);
+    const validColors = colors.filter((_, i) => counts[i] > 0);
     
     if (ChartManager.labelChart) {
-        ChartManager.updateLabelData({ labels: validLabels, values: validCounts });
+        ChartManager.updateLabelData({ labels: validLabels, values: validCounts, colors: validColors });
     }
 
     // Heat top 10
@@ -509,8 +615,9 @@ function updateCharts(items) {
 
 // Search
 document.getElementById('hotsearch-search').addEventListener('input', debounce(() => {
-    loadHotSearch();
-}, 300));
+    if (State.allItems.length) renderHotSearch();
+    else loadHotSearch({ showSkeleton: false });
+}, 150));
 
 // Trigger
 document.getElementById('btn-trigger').addEventListener('click', async () => {
@@ -518,7 +625,7 @@ document.getElementById('btn-trigger').addEventListener('click', async () => {
         await API.post('/api/hotsearch/trigger', {});
         UTILS.showToast('推送管线已触发，即将刷新数据...', 'success');
         setTimeout(() => {
-            loadHotSearch();
+            loadHotSearch({ force: true });
             loadLogs();
         }, 3000);
     } catch (e) { UTILS.showToast(e.message, 'error'); }
@@ -579,7 +686,7 @@ window.showTrend = async function(keyword) {
             return;
         }
         
-        let html = `<h4 style="margin-bottom:16px;">"${UTILS.escape(keyword)}" 📈 排名趋势</h4>`;
+        let html = `<h4 style="margin-bottom:16px;">"${UTILS.escape(keyword)}" 排名趋势</h4>`;
         html += '<div class="trend-chart">';
         
         const maxRank = Math.max(...trend.map(t => t.rank || 1));
@@ -613,31 +720,133 @@ async function loadConfig() {
     try {
         const config = await API.get('/api/config');
         const currentHours = config.dedupeWindowHours || 6;
+        const currentInterval = config.fetchIntervalMinutes || 10;
+        const currentRetentionDays = config.snapshotRetentionDays || 30;
         document.getElementById('current-dedupe-hours').textContent = currentHours;
         document.getElementById('dedupe-hours').value = currentHours;
-        document.getElementById('btn-save-config').disabled = true;
+        document.getElementById('btn-save-dedupe-config').disabled = true;
+        document.getElementById('fetch-interval-minutes').value = currentInterval;
+        document.getElementById('current-fetch-interval').textContent = currentInterval;
+        document.getElementById('btn-save-fetch-config').disabled = true;
+        document.getElementById('snapshot-retention-days').value = currentRetentionDays;
+        document.getElementById('current-retention-days').textContent = currentRetentionDays;
+        document.getElementById('btn-save-retention-config').disabled = true;
+        document.getElementById('sink-base-url').value = config.sinkBaseUrl || '';
+        document.getElementById('sink-site-token').value = config.sinkToken || '';
+        State.config = config;
 
         document.getElementById('dedupe-hours').onchange = () => {
             const newVal = document.getElementById('dedupe-hours').value;
-            document.getElementById('btn-save-config').disabled = (parseInt(newVal) === currentHours);
+            document.getElementById('btn-save-dedupe-config').disabled = (parseInt(newVal) === currentHours);
+        };
+        document.getElementById('fetch-interval-minutes').oninput = () => {
+            const newVal = parseInt(document.getElementById('fetch-interval-minutes').value);
+            document.getElementById('btn-save-fetch-config').disabled = (newVal === currentInterval);
+        };
+        document.getElementById('snapshot-retention-days').oninput = () => {
+            const newVal = parseInt(document.getElementById('snapshot-retention-days').value);
+            document.getElementById('btn-save-retention-config').disabled = (newVal === currentRetentionDays);
         };
     } catch (e) { console.warn('加载配置失败:', e.message); }
 }
 
-document.getElementById('btn-save-config').addEventListener('click', async () => {
+document.getElementById('btn-save-dedupe-config').addEventListener('click', async () => {
     const hours = parseInt(document.getElementById('dedupe-hours').value);
     try {
         await API.put('/api/config', { dedupeWindowHours: hours });
         document.getElementById('current-dedupe-hours').textContent = hours;
-        document.getElementById('btn-save-config').disabled = true;
+        document.getElementById('btn-save-dedupe-config').disabled = true;
         UTILS.showToast(`去重窗口已更新为 ${hours} 小时`, 'success');
     } catch (err) {
         UTILS.showToast('保存失败: ' + err.message, 'error');
     }
 });
 
+document.getElementById('btn-save-fetch-config').addEventListener('click', async () => {
+    const minutes = parseInt(document.getElementById('fetch-interval-minutes').value);
+    try {
+        await API.put('/api/config', { fetchIntervalMinutes: minutes });
+        document.getElementById('current-fetch-interval').textContent = minutes;
+        document.getElementById('btn-save-fetch-config').disabled = true;
+        UTILS.showToast(`数据抓取频率已更新为 ${minutes} 分钟/次`, 'success');
+    } catch (err) {
+        UTILS.showToast('保存失败: ' + err.message, 'error');
+    }
+});
+
+document.getElementById('btn-save-retention-config').addEventListener('click', async () => {
+    const days = parseInt(document.getElementById('snapshot-retention-days').value);
+    try {
+        await API.put('/api/config', { snapshotRetentionDays: days });
+        document.getElementById('current-retention-days').textContent = days;
+        document.getElementById('btn-save-retention-config').disabled = true;
+        UTILS.showToast(`快照保留时间已更新为 ${days} 天`, 'success');
+    } catch (err) {
+        UTILS.showToast('保存失败: ' + err.message, 'error');
+    }
+});
+
+document.getElementById('btn-save-sink-config').addEventListener('click', async () => {
+    const sinkBaseUrl = document.getElementById('sink-base-url').value.trim();
+    const sinkToken = document.getElementById('sink-site-token').value.trim();
+    try {
+        const config = await API.put('/api/config', { sinkBaseUrl, sinkToken });
+        document.getElementById('sink-base-url').value = config.sinkBaseUrl || '';
+        document.getElementById('sink-site-token').value = config.sinkToken || '';
+        State.config = config;
+        UTILS.showToast(config.sinkConfigured ? 'Sink 短链服务配置已保存' : 'Sink 短链服务配置已清除', 'success');
+    } catch (err) {
+        UTILS.showToast('保存失败: ' + err.message, 'error');
+    }
+});
+
+// ==================== Cached Data Helpers ====================
+async function getChannels(force = false) {
+    const cacheTtlMs = 30000;
+    const now = Date.now();
+    if (!force && State.channelsCache.data && (now - State.channelsCache.loadedAt) < cacheTtlMs) {
+        return State.channelsCache.data;
+    }
+
+    const channels = await API.get('/api/channels');
+    State.channelsCache = { data: channels, loadedAt: now };
+    return channels;
+}
+
+function invalidateChannelsCache() {
+    State.channelsCache = { data: null, loadedAt: 0 };
+}
 // ==================== Subscription Functions ====================
 let editingSubscriptionId = null;
+
+function beijingInputToIso(value) {
+    if (!value) return null;
+    const normalized = value.length === 16 ? `${value}:00` : value;
+    const date = new Date(`${normalized}+08:00`);
+    return isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function isoToBeijingInput(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (isNaN(date.getTime())) return '';
+    return new Date(date.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 19);
+}
+
+function formatBeijingDateTime(value) {
+    if (!value) return '长期';
+    const date = new Date(value);
+    if (isNaN(date.getTime())) return '-';
+    return new Intl.DateTimeFormat('zh-CN', {
+        timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    }).format(date);
+}
+
+function subscriptionValidityText(sub) {
+    if (!sub.startAt && !sub.endAt) return '长期有效';
+    return `${sub.startAt ? formatBeijingDateTime(sub.startAt) : '长期'} 至 ${sub.endAt ? formatBeijingDateTime(sub.endAt) : '长期'}`;
+}
 
 function loadSubscriptions() {
     const container = document.getElementById('sub-list');
@@ -649,7 +858,7 @@ function loadSubscriptions() {
         if (!subscriptions.length) {
             container.innerHTML = `
                 <div class="empty onboarding">
-                    <div class="empty-icon">📋</div>
+                    <div class="empty-icon">—</div>
                     <h3>订阅管理</h3>
                     <p>创建订阅规则，匹配的热搜会自动推送到指定通道</p>
                     <p>支持关键词匹配、正则表达式、标签过滤</p>
@@ -669,7 +878,7 @@ function loadSubscriptions() {
         if (!filtered.length) {
             container.innerHTML = `
                 <div class="empty">
-                    <div class="empty-icon">🔍</div>
+                    <div class="empty-icon">—</div>
                     <p>未找到匹配 "${search}" 的订阅</p>
                 </div>
             `;
@@ -682,10 +891,13 @@ function loadSubscriptions() {
                     <div class="item-header">
                         <div class="item-name">${UTILS.escape(sub.name)}</div>
                         <div style="display:flex;align-items:center;gap:6px;">
-                            <span class="status-dot ${sub.enabled ? 'on' : 'off'}"></span>
+                            ${sub.startAt && new Date(sub.startAt) > new Date()
+                                ? '<span class="tag">待生效</span>'
+                                : ''}
+                            <span class="status-dot ${sub.enabled && (!sub.startAt || new Date(sub.startAt) <= new Date()) ? 'on' : 'off'}"></span>
                             <div style="display:flex;gap:4px;">
-                                <button class="btn btn-sm btn-ghost" onclick="editSubscription(${sub.id})" title="编辑">✏️</button>
-                                <button class="btn btn-sm btn-ghost btn-danger" onclick="deleteSubscription(${sub.id})" title="删除">🗑️</button>
+                                <button class="btn btn-sm btn-ghost" onclick="editSubscription(${sub.id})" title="编辑">编辑</button>
+                                <button class="btn btn-sm btn-ghost btn-danger" onclick="deleteSubscription(${sub.id})" title="删除">删除</button>
                             </div>
                         </div>
                     </div>
@@ -700,6 +912,7 @@ function loadSubscriptions() {
                         }</div>
                     ` : ''}
                     <div class="item-meta">
+                        有效期（北京时间）: ${subscriptionValidityText(sub)}<br>
                         标签过滤: ${sub.labels?.join(', ') || '无'} • 最低热度: ${sub.minHotValue || '不限'} • 推送: ${sub.channelIds?.length ? `已选${sub.channelIds.length}个通道` : '全部通道'} • 创建: ${UTILS.formatTime(sub.createdAt)}
                     </div>
                     <div class="item-actions">
@@ -712,7 +925,7 @@ function loadSubscriptions() {
             `).join('');
         }, 200);
     }).catch(err => {
-        container.innerHTML = `<div class="empty"><div class="empty-icon">️⚠️</div><p>加载失败: ${UTILS.escape(err.message)}</p></div>`;
+        container.innerHTML = `<div class="empty"><div class="empty-icon">!</div><p>加载失败: ${UTILS.escape(err.message)}</p></div>`;
     });
 }
 
@@ -731,15 +944,19 @@ function showSubscriptionModal(subscription = null) {
         document.getElementById('sub-exclude').value = subscription.excludeKeywords?.join(', ') || '';
         document.getElementById('sub-labels').value = subscription.labels?.join(', ') || '';
         document.getElementById('sub-min-hot').value = subscription.minHotValue || 0;
+        document.getElementById('sub-start-at').value = isoToBeijingInput(subscription.startAt);
+        document.getElementById('sub-end-at').value = isoToBeijingInput(subscription.endAt);
         document.getElementById('sub-enabled').checked = subscription.enabled !== false;
     } else {
         form.reset();
         document.getElementById('sub-min-hot').value = 0;
+        document.getElementById('sub-start-at').value = '';
+        document.getElementById('sub-end-at').value = '';
         document.getElementById('sub-enabled').checked = true;
     }
 
     // Load channels for checkbox selection
-    API.get('/api/channels').then(channels => {
+    getChannels().then(channels => {
         const container = document.getElementById('sub-channel-list');
         const selectedIds = subscription?.channelIds || [];
         if (channels.length) {
@@ -764,6 +981,13 @@ document.getElementById('btn-add-sub').addEventListener('click', () => showSubsc
 
 document.getElementById('sub-form').addEventListener('submit', async (e) => {
     e.preventDefault();
+
+    const startAt = beijingInputToIso(document.getElementById('sub-start-at').value);
+    const endAt = beijingInputToIso(document.getElementById('sub-end-at').value);
+    if (startAt && endAt && new Date(startAt) >= new Date(endAt)) {
+        UTILS.showToast('结束时间必须晚于开始时间', 'error');
+        return;
+    }
     
     const subscription = {
         name: document.getElementById('sub-name').value,
@@ -772,7 +996,9 @@ document.getElementById('sub-form').addEventListener('submit', async (e) => {
         labels: UTILS.splitList(document.getElementById('sub-labels').value),
         minHotValue: parseInt(document.getElementById('sub-min-hot').value) || null,
         channelIds: Array.from(document.querySelectorAll('.sub-ch-cb:checked')).map(cb => parseInt(cb.value)),
-        enabled: document.getElementById('sub-enabled').checked
+        enabled: document.getElementById('sub-enabled').checked,
+        startAt,
+        endAt
     };
     
     const id = document.getElementById('sub-id').value;
@@ -818,6 +1044,55 @@ function deleteSubscription(id) {
     }).catch(err => UTILS.showToast(err.message, 'error'));
 }
 
+function loadExpiredSubscriptions() {
+    const container = document.getElementById('sub-history-list');
+    UTILS.showLoading(container);
+    API.get('/api/subscriptions/history').then(subscriptions => {
+        if (!subscriptions.length) {
+            container.innerHTML = '<div class="empty"><div class="empty-icon">—</div><p>暂无已过期规则</p></div>';
+            return;
+        }
+        container.innerHTML = subscriptions.map(sub => `
+            <div class="item-card">
+                <div class="item-header">
+                    <div class="item-name">${UTILS.escape(sub.name)}</div>
+                    <div style="display:flex;gap:4px;">
+                        <button class="btn btn-sm btn-ghost" onclick="editHistoricalSubscription(${sub.id})">编辑</button>
+                        <button class="btn btn-sm btn-ghost btn-danger" onclick="deleteHistoricalSubscription(${sub.id})">删除</button>
+                    </div>
+                </div>
+                ${sub.keywords?.length ? `<div class="item-tags">${sub.keywords.map(k => `<span class="tag">${UTILS.escape(k)}</span>`).join('')}</div>` : ''}
+                <div class="item-meta">
+                    有效期（北京时间）: ${subscriptionValidityText(sub)} • 状态: 已过期
+                </div>
+            </div>
+        `).join('');
+    }).catch(err => {
+        container.innerHTML = `<div class="empty"><div class="empty-icon">!</div><p>加载失败: ${UTILS.escape(err.message)}</p></div>`;
+    });
+}
+
+function showSubscriptionHistory() {
+    showModal('sub-history-modal');
+    loadExpiredSubscriptions();
+}
+
+function editHistoricalSubscription(id) {
+    hideModal('sub-history-modal');
+    editSubscription(id);
+}
+
+function deleteHistoricalSubscription(id) {
+    if (!confirm('确定删除这条历史规则吗？')) return;
+    API.delete(`/api/subscriptions/${id}`).then(() => {
+        UTILS.showToast('历史规则已删除', 'success');
+        loadExpiredSubscriptions();
+    }).catch(err => UTILS.showToast(err.message, 'error'));
+}
+
+document.getElementById('btn-sub-history').addEventListener('click', showSubscriptionHistory);
+document.getElementById('btn-close-sub-history').addEventListener('click', () => hideModal('sub-history-modal'));
+
 // Search subscriptions
 document.getElementById('sub-search').addEventListener('input', debounce(() => {
     loadSubscriptions();
@@ -831,11 +1106,11 @@ function loadChannels() {
     
     UTILS.showLoading(container);
     
-    API.get('/api/channels').then(channels => {
+    getChannels().then(channels => {
         if (!channels.length) {
             container.innerHTML = `
                 <div class="empty onboarding">
-                    <div class="empty-icon">📤</div>
+                    <div class="empty-icon">—</div>
                     <h3>推送通道</h3>
                     <p>添加飞书、钉钉、企微、Telegram等推送通道</p>
                     <p>每条通道可以绑定多个订阅规则</p>
@@ -853,8 +1128,8 @@ function loadChannels() {
                         <div style="display:flex;align-items:center;gap:6px;">
                             <span class="status-dot ${ch.enabled ? 'on' : 'off'}"></span>
                             <div style="display:flex;gap:4px;">
-                                <button class="btn btn-sm btn-ghost" onclick="editChannel(${ch.id})" title="编辑">✏️</button>
-                                <button class="btn btn-sm btn-ghost btn-danger" onclick="deleteChannel(${ch.id})" title="删除">🗑️</button>
+                                ${ch.provider === 'wxsubscribe' ? '' : `<button class="btn btn-sm btn-ghost" onclick="editChannel(${ch.id})" title="编辑">编辑</button>`}
+                                <button class="btn btn-sm btn-ghost btn-danger" onclick="deleteChannel(${ch.id})" title="删除">删除</button>
                             </div>
                         </div>
                     </div>
@@ -871,7 +1146,7 @@ function loadChannels() {
             `).join('');
         }, 200);
     }).catch(err => {
-        container.innerHTML = `<div class="empty"><div class="empty-icon">️⚠️</div><p>加载失败: ${UTILS.escape(err.message)}</p></div>`;
+        container.innerHTML = `<div class="empty"><div class="empty-icon">!</div><p>加载失败: ${UTILS.escape(err.message)}</p></div>`;
     });
 }
 
@@ -882,7 +1157,8 @@ function getProviderLabel(provider) {
         wecom: '企业微信',
         wechat: '微信机器人',
         telegram: 'Telegram Bot',
-        generic: '通用 Webhook'
+        generic: '通用 Webhook',
+        wxsubscribe: '小程序订阅消息'
     };
     return labels[provider] || provider;
 }
@@ -898,16 +1174,20 @@ function maskWebhookUrl(url) {
 
 function describeChannelConfig(ch) {
     const config = ch.config || {};
+    const shortLink = config.shortLinkEnabled ? ' · 短链: 已启用' : '';
+    if (ch.provider === 'wxsubscribe') {
+        return '在小程序「我的」页开启提醒后自动创建 · 模板与发送额度由主服务管理，仅命中事件降噪后发送';
+    }
     if (ch.provider === 'wechat') {
-        return `目标聊天: ${UTILS.escape(config.chat || '未配置')} · API: ${UTILS.escape(config.apiBaseUrl || 'http://localhost:5001')}`;
+        return `目标聊天: ${UTILS.escape(config.chat || '未配置')} · API: ${UTILS.escape(config.apiBaseUrl || 'http://localhost:5001')}${shortLink}`;
     }
     if (ch.provider === 'feishu' && config.mode === 'app') {
-        return `自建应用: ${UTILS.escape(config.appId || '未配置')} · 接收: ${UTILS.escape(config.receiveId || config.token || '未配置')}`;
+        return `自建应用: ${UTILS.escape(config.appId || '未配置')} · 接收: ${UTILS.escape(config.receiveId || config.token || '未配置')}${shortLink}`;
     }
     if (ch.provider === 'telegram') {
-        return `Bot Token: ${UTILS.escape(config.token || '未配置')} · Chat ID: ${UTILS.escape(config.chatId || '未配置')}`;
+        return `Bot Token: ${UTILS.escape(config.token || '未配置')} · Chat ID: ${UTILS.escape(config.chatId || '未配置')}${shortLink}`;
     }
-    return `Webhook: ${maskWebhookUrl(config.webhookUrl || config.webhook_url || '')}`;
+    return `Webhook: ${maskWebhookUrl(config.webhookUrl || config.webhook_url || '')}${shortLink}`;
 }
 
 function updateProviderHint() {
@@ -923,12 +1203,12 @@ function updateProviderHint() {
     const fieldWechat = document.getElementById('ch-field-wechat');
 
     const hints = {
-        feishu: '💡 飞书群机器人 → 添加机器人 → 复制自定义机器人 Webhook 地址',
-        dingtalk: '💡 钉钉群机器人 → 安全设置 → Webhook → 复制带 access_token 的地址',
-        wecom: '💡 企业微信群 → 添加群机器人 → 复制 key 参数形式的 Webhook 地址',
-        wechat: '💡 通过 WeChatBot RESTful API 发送微信消息',
-        telegram: '💡 Telegram 需要 Bot Token 和 Chat ID，本服务会直接调用 sendMessage API',
-        generic: '💡 任意支持 POST JSON 的 HTTP/HTTPS 端点'
+        feishu: '提示：飞书群机器人 → 添加机器人 → 复制自定义机器人 Webhook 地址',
+        dingtalk: '提示：钉钉群机器人 → 安全设置 → Webhook → 复制带 access_token 的地址',
+        wecom: '提示：企业微信群 → 添加群机器人 → 复制 key 参数形式的 Webhook 地址',
+        wechat: '提示：通过 WeChatBot RESTful API 发送微信消息',
+        telegram: '提示：Telegram 需要 Bot Token 和 Chat ID，本服务会直接调用 sendMessage API',
+        generic: '提示：任意支持 POST JSON 的 HTTP/HTTPS 端点'
     };
 
     const labels = {
@@ -953,7 +1233,7 @@ function updateProviderHint() {
         fieldFeishuApp.style.display = '';
         fieldTelegram.style.display = 'none';
         fieldWechat.style.display = 'none';
-        hintEl.textContent = '💡 自建应用机器人：App ID + App Secret 获取 tenant_access_token，再向接收 ID 发送消息';
+        hintEl.textContent = '提示：自建应用机器人：App ID + App Secret 获取 tenant_access_token，再向接收 ID 发送消息';
     } else if (provider === 'feishu') {
         fieldWebhook.style.display = '';
         fieldFeishuApp.style.display = 'none';
@@ -984,12 +1264,18 @@ function updateProviderHint() {
         urlLabel.textContent = labels[provider] || '配置';
         webhookInput.placeholder = placeholders[provider] || placeholders.generic;
     }
+
 }
 
 function showChannelModal(channel = null) {
+    if (channel && channel.provider === 'wxsubscribe') {
+        UTILS.showToast('小程序订阅消息通道由小程序端管理，此处仅支持测试、启停和删除');
+        return;
+    }
     editingChannelId = channel?.id || null;
     const modal = document.getElementById('ch-modal');
     const title = document.getElementById('ch-modal-title');
+    document.getElementById('ch-shortlink-enabled').checked = false;
     
     title.textContent = channel ? '编辑通道' : '新增通道';
     
@@ -1014,6 +1300,7 @@ function showChannelModal(channel = null) {
         } else {
             document.getElementById('ch-webhook').value = channel.config?.webhookUrl || channel.config?.webhook_url || '';
         }
+        document.getElementById('ch-shortlink-enabled').checked = channel.config?.shortLinkEnabled === true;
         document.getElementById('ch-enabled').checked = channel.enabled !== false;
     } else {
         document.getElementById('ch-form').reset();
@@ -1031,6 +1318,11 @@ document.getElementById('btn-add-ch').addEventListener('click', () => showChanne
 
 document.getElementById('ch-provider').addEventListener('change', updateProviderHint);
 document.getElementById('ch-feishu-mode').addEventListener('change', updateProviderHint);
+document.getElementById('btn-open-sink-config').addEventListener('click', () => {
+    hideModal('ch-modal');
+    document.querySelector('.tab[data-tab="config"]').click();
+    setTimeout(() => document.getElementById('sink-config-card').scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+});
 
 document.getElementById('ch-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -1071,6 +1363,8 @@ document.getElementById('ch-form').addEventListener('submit', async (e) => {
         config = { webhookUrl: webhook };
     }
 
+    config.shortLinkEnabled = document.getElementById('ch-shortlink-enabled').checked;
+
     const channel = { provider, config, enabled };
     
     const id = document.getElementById('ch-id').value;
@@ -1084,6 +1378,7 @@ document.getElementById('ch-form').addEventListener('submit', async (e) => {
             UTILS.showToast('通道创建成功', 'success');
         }
         hideModal('ch-modal');
+        invalidateChannelsCache();
         loadChannels();
     } catch (err) {
         UTILS.showToast(err.message, 'error');
@@ -1103,6 +1398,7 @@ function editChannel(id) {
 function toggleChannel(id, enabled) {
     API.patch(`/api/channels/${id}/enabled`, { enabled }).then(() => {
         UTILS.showToast(`通道已${enabled ? '启用' : '禁用'}`, 'success');
+        invalidateChannelsCache();
         loadChannels();
     }).catch(err => UTILS.showToast(err.message, 'error'));
 }
@@ -1112,6 +1408,7 @@ function deleteChannel(id) {
     
     API.delete(`/api/channels/${id}`).then(() => {
         UTILS.showToast('通道删除成功', 'success');
+        invalidateChannelsCache();
         loadChannels();
     }).catch(err => UTILS.showToast(err.message, 'error'));
 }
@@ -1135,7 +1432,7 @@ function loadLogs() {
         if (!logs.length) {
             container.innerHTML = `
                 <div class="empty onboarding">
-                    <div class="empty-icon">📨</div>
+                    <div class="empty-icon">—</div>
                     <h3>推送日志</h3>
                     <p>查看所有已发生的推送记录</p>
                     <p>包括成功/失败状态、推送时间、错误信息</p>
@@ -1148,7 +1445,7 @@ function loadLogs() {
             container.innerHTML = logs.map(entry => renderLogEntry(entry)).join('');
         }, 200);
     }).catch(err => {
-        container.innerHTML = `<div class="empty"><div class="empty-icon">️⚠️</div><p>加载失败: ${UTILS.escape(err.message)}</p></div>`;
+        container.innerHTML = `<div class="empty"><div class="empty-icon">!</div><p>加载失败: ${UTILS.escape(err.message)}</p></div>`;
     });
 }
 
@@ -1187,7 +1484,8 @@ function renderLogEntry(entry) {
 function shortProviderName(provider) {
     const names = {
         feishu: '飞书', dingtalk: '钉钉', wecom: '企微',
-        wechat: '微信', telegram: 'Telegram', generic: 'Webhook'
+        wechat: '微信', telegram: 'Telegram', generic: 'Webhook',
+        wxsubscribe: '小程序'
     };
     return names[provider] || provider;
 }
@@ -1248,7 +1546,7 @@ function showDashboard(username, mustChangePassword) {
 
     // Set theme
     State.setTheme(State.theme);
-    document.getElementById('btn-theme').textContent = State.theme === 'light' ? '🌙' : '☀️';
+    document.getElementById('btn-theme').textContent = State.theme === 'light' ? '深色模式' : '浅色模式';
 
     // Initialize charts then load initial tab
     setTimeout(() => {
@@ -1288,9 +1586,8 @@ setTimeout(() => {
     if (!hotsearchTab.querySelector('.freshness-banner')) {
         hotsearchTab.insertAdjacentHTML('afterbegin', `
             <div class="freshness-banner">
-                <div class="freshness-title">🎯 数据时效性说明</div>
+                <div class="freshness-title">热搜概览</div>
                 <p>数据为定时抓取快照，非实时更新。最近更新：<span class="freshness-time">—</span></p>
-                <p style="font-size:11px;color:var(--text-light);margin-top:4px;">系统每小时自动获取微博热搜榜最新数据</p>
             </div>
         `);
     }

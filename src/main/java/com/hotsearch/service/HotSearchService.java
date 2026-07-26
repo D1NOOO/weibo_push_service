@@ -6,12 +6,11 @@ import com.hotsearch.dto.HotSearchResult;
 import com.hotsearch.entity.HotSearchSnapshot;
 import com.hotsearch.fetcher.WeiboFetcher;
 import com.hotsearch.repository.HotSearchSnapshotRepository;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.*;
 
 @Service
@@ -20,24 +19,49 @@ public class HotSearchService {
     private final WeiboFetcher weiboFetcher;
     private final HotSearchSnapshotRepository snapshotRepository;
     private final ObjectMapper objectMapper;
-    private final ZoneId appZoneId;
 
     public HotSearchService(WeiboFetcher weiboFetcher, HotSearchSnapshotRepository snapshotRepository,
-                            ObjectMapper objectMapper,
-                            @Value("${spring.jackson.time-zone:Asia/Shanghai}") String appTimeZone) {
+                            ObjectMapper objectMapper) {
         this.weiboFetcher = weiboFetcher;
         this.snapshotRepository = snapshotRepository;
         this.objectMapper = objectMapper;
-        this.appZoneId = ZoneId.of(appTimeZone);
     }
 
+    // 抓取状态（进程内，重启后由最新快照兜底）
+    private volatile Instant lastAttemptAt;
+    private volatile Instant lastSuccessAt;
+    private volatile int lastItemCount;
+
     public List<HotSearchItem> fetchAndSave() {
+        lastAttemptAt = Instant.now();
         List<HotSearchItem> items = weiboFetcher.fetch();
+        lastItemCount = items.size();
+        if (!items.isEmpty()) {
+            lastSuccessAt = Instant.now();
+        }
         HotSearchSnapshot snapshot = new HotSearchSnapshot();
-        snapshot.setFetchedAt(LocalDateTime.now());
+        snapshot.setFetchedAt(LocalDateTime.now(ZoneOffset.UTC));
         snapshot.setItemsObject(items);
         snapshotRepository.save(snapshot);
         return items;
+    }
+
+    /** 抓取状态：最近尝试/成功时间、条数（进程内数据缺失时回落到最新快照）。 */
+    public Map<String, Object> getFetchStatus() {
+        Map<String, Object> status = new LinkedHashMap<>();
+        Instant snapshotAt = snapshotRepository.findTopByOrderByFetchedAtDesc()
+                .map(s -> toInstant(s.getFetchedAt()))
+                .orElse(null);
+        Instant attemptAt = lastAttemptAt != null ? lastAttemptAt : snapshotAt;
+        Instant successAt = lastSuccessAt != null ? lastSuccessAt : snapshotAt;
+        int itemCount = lastAttemptAt != null ? lastItemCount
+                : snapshotRepository.findTopByOrderByFetchedAtDesc()
+                        .map(s -> parseItems(s.getItems()).size()).orElse(0);
+        status.put("lastAttemptAt", attemptAt);
+        status.put("lastSuccessAt", successAt);
+        status.put("lastItemCount", itemCount);
+        status.put("healthy", itemCount > 0);
+        return status;
     }
 
     public List<HotSearchItem> getLatest() {
@@ -58,7 +82,7 @@ public class HotSearchService {
      * Returns a list of { fetchedAt, itemCount, topKeywords } maps.
      */
     public List<Map<String, Object>> getHistorySnapshots(int hours) {
-        LocalDateTime since = LocalDateTime.now().minusHours(hours);
+        LocalDateTime since = LocalDateTime.now(ZoneOffset.UTC).minusHours(hours);
         List<HotSearchSnapshot> snapshots = snapshotRepository.findByFetchedAtAfterOrderByFetchedAtDesc(since);
         
         List<Map<String, Object>> result = new ArrayList<>();
@@ -80,7 +104,7 @@ public class HotSearchService {
      * Returns [{ fetchedAt, rank, hotValue, label }]
      */
     public List<Map<String, Object>> getKeywordTrend(String keyword, int hours) {
-        LocalDateTime since = LocalDateTime.now().minusHours(hours);
+        LocalDateTime since = LocalDateTime.now(ZoneOffset.UTC).minusHours(hours);
         List<HotSearchSnapshot> snapshots = snapshotRepository.findByFetchedAtAfterOrderByFetchedAtDesc(since);
         
         List<Map<String, Object>> trend = new ArrayList<>();
@@ -112,6 +136,6 @@ public class HotSearchService {
     }
 
     private Instant toInstant(LocalDateTime localDateTime) {
-        return localDateTime.atZone(appZoneId).toInstant();
+        return localDateTime.toInstant(ZoneOffset.UTC);
     }
 }

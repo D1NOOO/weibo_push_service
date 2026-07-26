@@ -8,6 +8,19 @@ services:
     volumes:
       - ./data:/app/data
     environment:
+      - TZ=Asia/Shanghai
       - JWT_SECRET=${JWT_SECRET:-}
       - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      # 微信小程序（本地联调可选）
+      - WX_APPID=${WX_APPID:-}
+      - WX_SECRET=${WX_SECRET:-}
+      - WX_SUBSCRIBE_TEMPLATE_ID=${WX_SUBSCRIBE_TEMPLATE_ID:-}
+      - WX_MINIPROGRAM_STATE=${WX_MINIPROGRAM_STATE:-developer}
+      - WX_CLOUD_INVOKE_MODE=${WX_CLOUD_INVOKE_MODE:-http-trigger}
+      - WX_CLOUD_HTTP_TRIGGER_URL=${WX_CLOUD_HTTP_TRIGGER_URL:-}
+      - WX_CLOUD_ENV_ID=${WX_CLOUD_ENV_ID:-}
+      - WX_CLOUD_SHARED_SECRET=${WX_CLOUD_SHARED_SECRET:-}
+      # 微博抓取 403 时配置 Cookie（DEPLOY.md Q1）；field-mapping 等高级覆盖用 SPRING_APPLICATION_JSON
+      - APP_FETCHER_COOKIE=${APP_FETCHER_COOKIE:-}
+      - SPRING_APPLICATION_JSON=${SPRING_APPLICATION_JSON:-}
     restart: unless-stopped

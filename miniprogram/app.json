@@ -1,0 +1,42 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/subscriptions/index",
+    "pages/subscription-edit/index",
+    "pages/matches/index",
+    "pages/profile/index",
+    "pages/trend/index",
+    "pages/calculator/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "热搜提醒",
+    "navigationBarBackgroundColor": "#111827",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f6f7f9"
+  },
+  "tabBar": {
+    "color": "#6b7280",
+    "selectedColor": "#111827",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/subscriptions/index",
+        "text": "订阅"
+      },
+      {
+        "pagePath": "pages/matches/index",
+        "text": "命中"
+      },
+      {
+        "pagePath": "pages/profile/index",
+        "text": "我的"
+      }
+    ]
+  },
+  "sitemapLocation": "sitemap.json"
+}

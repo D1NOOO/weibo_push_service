@@ -1,13 +1,18 @@
 package com.hotsearch.controller;
 
+import com.hotsearch.config.ScheduleConfig;
 import com.hotsearch.dto.HotSearchResult;
+import com.hotsearch.service.ApplicationConfigService;
 import com.hotsearch.service.HotSearchService;
 import com.hotsearch.service.PipelineService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 
@@ -18,10 +23,26 @@ public class HotSearchController {
 
     private final HotSearchService hotSearchService;
     private final PipelineService pipelineService;
+    private final ApplicationConfigService configService;
+    private final ZoneId scheduleZone;
 
-    public HotSearchController(HotSearchService hotSearchService, PipelineService pipelineService) {
+    public HotSearchController(HotSearchService hotSearchService, PipelineService pipelineService,
+                               ApplicationConfigService configService,
+                               @Value("${app.schedule.zone:Asia/Shanghai}") String scheduleZone) {
         this.hotSearchService = hotSearchService;
         this.pipelineService = pipelineService;
+        this.configService = configService;
+        this.scheduleZone = ZoneId.of(scheduleZone);
+    }
+
+    @GetMapping("/status")
+    @Operation(summary = "抓取状态", description = "最近抓取时间、条数、抓取间隔与下一次抓取时间")
+    public ResponseEntity<Map<String, Object>> status() {
+        Map<String, Object> status = hotSearchService.getFetchStatus();
+        int intervalMinutes = configService.getFetchIntervalMinutes();
+        status.put("intervalMinutes", intervalMinutes);
+        status.put("nextFetchAt", ScheduleConfig.nextExecution(Instant.now(), intervalMinutes, scheduleZone));
+        return ResponseEntity.ok(status);
     }
 
     @GetMapping

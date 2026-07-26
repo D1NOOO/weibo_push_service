@@ -1,0 +1,13 @@
+.block-btn {
+  width: 100%;
+  margin-top: 16rpx;
+}
+
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.preview-panel {
+  margin-top: 24rpx;
+}

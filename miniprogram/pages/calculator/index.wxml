@@ -1,0 +1,19 @@
+<view class="page calc-page">
+  <view class="calc-display panel">
+    <view class="calc-expression">{{expression}}</view>
+    <view class="calc-screen">{{screen}}</view>
+  </view>
+
+  <view class="calc-keys">
+    <view class="calc-row" wx:for="{{keys}}" wx:key="id" wx:for-item="row">
+      <view
+        wx:for="{{row.keys}}"
+        wx:key="*this"
+        class="calc-key {{item === '=' ? 'calc-key-primary' : ''}} {{item === 'C' ? 'calc-key-danger' : ''}}"
+        data-key="{{item}}"
+        bindtap="onKeyTap"
+        hover-class="calc-key-hover"
+      >{{item}}</view>
+    </view>
+  </view>
+</view>

@@ -1,25 +1,65 @@
 package com.hotsearch.service;
 
+import com.hotsearch.dto.HotSearchItem;
+import com.hotsearch.dto.HotSearchResult;
+import com.hotsearch.dto.SubscriptionPreviewResponse;
 import com.hotsearch.dto.SubscriptionRequest;
 import com.hotsearch.dto.SubscriptionResponse;
 import com.hotsearch.entity.Subscription;
+import com.hotsearch.matcher.SubscriptionMatcher;
 import com.hotsearch.repository.SubscriptionRepository;
+import com.hotsearch.repository.ChannelRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 public class SubscriptionService {
 
-    private final SubscriptionRepository subscriptionRepository;
+    private static final int PREVIEW_LIMIT = 50;
 
-    public SubscriptionService(SubscriptionRepository subscriptionRepository) {
+    private final SubscriptionRepository subscriptionRepository;
+    private final ChannelRepository channelRepository;
+    private final SubscriptionMatcher matcher;
+    private final HotSearchService hotSearchService;
+
+    public SubscriptionService(SubscriptionRepository subscriptionRepository, ChannelRepository channelRepository,
+                               SubscriptionMatcher matcher, HotSearchService hotSearchService) {
         this.subscriptionRepository = subscriptionRepository;
+        this.channelRepository = channelRepository;
+        this.matcher = matcher;
+        this.hotSearchService = hotSearchService;
+    }
+
+    /** 订阅规则预览：用当前最新热搜快照试跑匹配，不落库。 */
+    public SubscriptionPreviewResponse preview(SubscriptionRequest req) {
+        Subscription sub = new Subscription();
+        sub.setKeywords(req.keywords() != null ? req.keywords() : List.of());
+        sub.setExcludeKeywords(req.excludeKeywords() != null ? req.excludeKeywords() : List.of());
+        sub.setLabels(req.labels() != null ? req.labels() : List.of());
+        sub.setMinHotValue(req.minHotValue());
+        sub.setEnabled(true);
+
+        HotSearchResult latest = hotSearchService.getLatestWithMeta();
+        List<HotSearchItem> matched = matcher.match(latest.items(), List.of(sub)).stream()
+                .map(SubscriptionMatcher.MatchResult::item)
+                .limit(PREVIEW_LIMIT)
+                .toList();
+        return new SubscriptionPreviewResponse(matched.size(), latest.fetchedAt(), matched);
     }
 
     public List<SubscriptionResponse> listByUser(Long userId) {
-        return subscriptionRepository.findByUserId(userId).stream()
+        return subscriptionRepository.findCurrentByUserId(userId, utcNow()).stream()
+                .map(this::toResponse).toList();
+    }
+
+    public List<SubscriptionResponse> listExpiredByUser(Long userId) {
+        return subscriptionRepository.findExpiredByUserId(userId, utcNow()).stream()
                 .map(this::toResponse).toList();
     }
 
@@ -32,8 +72,9 @@ public class SubscriptionService {
         sub.setExcludeKeywords(req.excludeKeywords() != null ? req.excludeKeywords() : List.of());
         sub.setLabels(req.labels() != null ? req.labels() : List.of());
         sub.setMinHotValue(req.minHotValue());
-        sub.setChannelIds(req.channelIds() != null ? req.channelIds() : List.of());
+        sub.setChannelIds(validateChannelIds(userId, req.channelIds()));
         sub.setEnabled(req.enabled() != null ? req.enabled() : true);
+        applyValidity(sub, req);
         return toResponse(subscriptionRepository.save(sub));
     }
 
@@ -47,8 +88,9 @@ public class SubscriptionService {
         sub.setExcludeKeywords(req.excludeKeywords() != null ? req.excludeKeywords() : List.of());
         sub.setLabels(req.labels() != null ? req.labels() : List.of());
         sub.setMinHotValue(req.minHotValue());
-        if (req.channelIds() != null) sub.setChannelIds(req.channelIds());
+        if (req.channelIds() != null) sub.setChannelIds(validateChannelIds(userId, req.channelIds()));
         sub.setEnabled(req.enabled());
+        applyValidity(sub, req);
         return toResponse(subscriptionRepository.save(sub));
     }
 
@@ -76,12 +118,52 @@ public class SubscriptionService {
         subscriptionRepository.delete(sub);
     }
 
+    private List<Long> validateChannelIds(Long userId, List<Long> channelIds) {
+        if (channelIds == null || channelIds.isEmpty()) {
+            return List.of();
+        }
+        List<Long> normalized = channelIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (normalized.isEmpty()) {
+            return List.of();
+        }
+        long validCount = channelRepository.countByUserIdAndIdIn(userId, normalized);
+        if (validCount != normalized.size()) {
+            throw new RuntimeException("订阅包含不存在或无权限的推送通道");
+        }
+        return normalized;
+    }
     private SubscriptionResponse toResponse(Subscription s) {
         return new SubscriptionResponse(s.getId(), s.getName(), s.getKeywords(),
-                s.getExcludeKeywords(), s.getLabels(), s.getMinHotValue(), s.getChannelIds(), s.getEnabled(), s.getCreatedAt());
+                s.getExcludeKeywords(), s.getLabels(), s.getMinHotValue(), s.getChannelIds(), s.getEnabled(),
+                s.getCreatedAt(), toInstant(s.getStartAt()), toInstant(s.getEndAt()));
     }
 
     public List<Subscription> listAllEnabled() {
-        return subscriptionRepository.findByEnabledTrue();
+        return subscriptionRepository.findAllEffectiveEnabled(utcNow());
+    }
+
+    private void applyValidity(Subscription subscription, SubscriptionRequest request) {
+        Instant startAt = request.startAt();
+        Instant endAt = request.endAt();
+        if (startAt != null && endAt != null && !startAt.isBefore(endAt)) {
+            throw new RuntimeException("结束时间必须晚于开始时间");
+        }
+        subscription.setStartAt(toUtcLocalDateTime(startAt));
+        subscription.setEndAt(toUtcLocalDateTime(endAt));
+    }
+
+    private Instant toInstant(LocalDateTime value) {
+        return value == null ? null : value.toInstant(ZoneOffset.UTC);
+    }
+
+    private LocalDateTime toUtcLocalDateTime(Instant value) {
+        return value == null ? null : LocalDateTime.ofInstant(value, ZoneOffset.UTC);
+    }
+
+    private LocalDateTime utcNow() {
+        return LocalDateTime.now(ZoneOffset.UTC);
     }
 }

@@ -1,0 +1,28 @@
+.block-btn {
+  width: 100%;
+  margin-top: 20rpx;
+}
+
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-row {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.avatar {
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: 50%;
+  background: #111827;
+  color: #ffffff;
+  font-size: 36rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}

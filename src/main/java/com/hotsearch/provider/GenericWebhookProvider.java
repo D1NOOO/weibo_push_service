@@ -27,6 +27,12 @@ public class GenericWebhookProvider implements MessageProvider {
 
     @Override
     public void send(Channel channel, HotSearchItem primaryItem, List<HotSearchItem> allItems) {
+        send(channel, primaryItem, allItems, null, null);
+    }
+
+    @Override
+    public void send(Channel channel, HotSearchItem primaryItem, List<HotSearchItem> allItems,
+                     String target, String messageTitle) {
         Map<String, Object> config = channel.getConfigMap();
         String webhookUrl = (String) config.get("webhookUrl");
         if (webhookUrl == null || webhookUrl.isBlank()) {
@@ -35,6 +41,7 @@ public class GenericWebhookProvider implements MessageProvider {
 
         try {
             Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("title", MessageProvider.normalizeTitle(messageTitle));
             payload.put("primaryItem", Map.of(
                     "keyword", primaryItem.keyword(),
                     "rank", primaryItem.rank(),

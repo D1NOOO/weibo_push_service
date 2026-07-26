@@ -1,0 +1,19 @@
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.kw {
+  font-size: 30rpx;
+  font-weight: 500;
+}
+
+.warn-text {
+  color: #b45309;
+}
+
+.trend-link {
+  margin-left: 12rpx;
+  color: #9ca3af;
+  font-size: 22rpx;
+}

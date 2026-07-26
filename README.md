@@ -20,10 +20,50 @@
 | 数据库 | SQLite + Hibernate (JPA) |
 | 安全 | Spring Security + JWT (jjwt 0.12) + BCrypt |
 | 前端 | 原生 HTML/CSS/JS + Chart.js v4 |
+| 小程序 | 微信原生小程序 |
+| 云函数 | 微信云函数，用于订阅消息发送钩子 |
 | 文档 | springdoc-openapi (Swagger UI) |
 | 部署 | Docker + docker-compose |
 
 ## 快速开始
+
+### 微信小程序开发
+
+用微信开发者工具打开仓库根目录。根目录的 `project.config.json` 已配置：
+
+```text
+miniprogramRoot = miniprogram/
+cloudfunctionRoot = cloudfunctions/
+```
+
+小程序 P0 闭环与 P1 体验增强已实现：微信静默登录、订阅管理（含规则预览）、命中事件列表（含趋势跳转）、订阅消息授权与额度、热搜榜首页、抓取状态、工具广场（热搜订阅/命中记录/热搜趋势/计算器 + 可配置第三方小程序跳转位）。
+
+架构分工（详见 [product-plan.md](./product-plan.md)）：
+
+```text
+小程序  --HTTPS 固定域名-->  主服务（自有服务器：抓取/匹配/聚合/降噪/通知策略）
+主服务  --HMAC 签名------>  云函数 sendSubscribeMessage（仅发送微信订阅消息）
+```
+
+云函数调用次数只与实际发送的微信提醒条数成正比（命中事件降噪后才发送），与抓取频率无关，正常使用远低于云开发免费额度。
+
+新手部署请看 **[DEPLOY.md](./DEPLOY.md)**（四阶段 step by step：本地跑通 → 云函数提醒 → 服务器上线 → 发布，含验证方法与排错表）。
+
+小程序上线检查清单（速查版）：
+
+1. `project.config.json` 中 `appid` 换成自己的小程序 AppID。
+2. [miniprogram/config.js](./miniprogram/config.js) 中 `PROD_API_BASE_URL` 改为主服务 HTTPS 域名，并在小程序后台加入 request 合法域名。
+3. 小程序后台「订阅消息」申请模板（推荐字段：关键词 thing、排名 character_string、热度 number、时间 time），模板 ID 配到主服务 `WX_SUBSCRIBE_TEMPLATE_ID`；字段 key 不一致时用 `app.wx.subscribe.field-mapping` 调整。
+4. 部署云函数并配置共享密钥，见 [cloudfunctions/sendSubscribeMessage/README.md](./cloudfunctions/sendSubscribeMessage/README.md)。
+5. 主服务配置 `WX_APPID` / `WX_SECRET` / `WX_CLOUD_*` 环境变量（见下表）。
+
+生产部署（MySQL）：
+
+```bash
+export JWT_SECRET=... MYSQL_PASSWORD=... MYSQL_ROOT_PASSWORD=... WX_APPID=... WX_SECRET=...
+export WX_SUBSCRIBE_TEMPLATE_ID=... WX_CLOUD_SHARED_SECRET=... WX_CLOUD_HTTP_TRIGGER_URL=...
+docker compose -f docker-compose.prod.yml up -d --build
+```
 
 ### Docker 部署
 
@@ -53,6 +93,15 @@ mvn spring-boot:run
 |------|--------|------|
 | `JWT_SECRET` | 无（必填） | JWT 签名密钥，至少 32 字符 |
 | `SPRING_JPA_HIBERNATE_DDL_AUTO` | `update` | 数据库 schema 策略 |
+| `SPRING_PROFILES_ACTIVE` | 无 | `prod` 时启用 MySQL（见 application-prod.yml） |
+| `MYSQL_HOST` / `MYSQL_PORT` / `MYSQL_DATABASE` / `MYSQL_USER` / `MYSQL_PASSWORD` | - | prod profile 的 MySQL 连接信息 |
+| `WX_APPID` / `WX_SECRET` | 空 | 小程序 AppID/Secret，用于 code2session（微信登录必填） |
+| `WX_SUBSCRIBE_TEMPLATE_ID` | 空 | 订阅消息模板 ID（微信提醒必填） |
+| `WX_MINIPROGRAM_STATE` | `formal` | 订阅消息跳转的小程序版本：developer/trial/formal |
+| `WX_CLOUD_INVOKE_MODE` | `http-trigger` | 云函数调用方式：`http-trigger` 或 `openapi` |
+| `WX_CLOUD_HTTP_TRIGGER_URL` | 空 | http-trigger 模式：HTTP 访问服务绑定云函数的完整 URL |
+| `WX_CLOUD_ENV_ID` | 空 | openapi 模式：云开发环境 ID（需服务器 IP 白名单） |
+| `WX_CLOUD_SHARED_SECRET` | 空 | 主服务↔云函数 HMAC 共享密钥（云函数侧为 `SUBSCRIBE_MESSAGE_SHARED_SECRET`） |
 
 ## 配置说明
 
@@ -149,8 +198,16 @@ GET    /api/delivery-logs        推送日志（按批次）
 GET    /api/config               系统配置
 PUT    /api/config               更新配置
 
-POST   /api/auth/login           登录
+POST   /api/auth/login           登录（Web 管理端账号密码）
+POST   /api/auth/wx-login        微信小程序登录（code2session）
+GET    /api/auth/me              当前用户信息
 POST   /api/auth/change-password 修改密码
+
+GET    /api/match-events                  命中事件列表（含今日新增/活跃统计）
+GET    /api/wx/subscribe-message/quota    订阅消息额度与模板 ID
+POST   /api/wx/subscribe-message/grant    上报订阅消息授权（额度 +1）
+POST   /api/subscriptions/preview         订阅规则预览（试跑当前热搜，不落库）
+GET    /api/hotsearch/status              抓取状态（最近抓取/条数/间隔/下次时间）
 ```
 
 ## 项目结构
@@ -168,4 +225,7 @@ src/main/java/com/hotsearch/
 ├── repository/      # Spring Data JPA repositories
 ├── service/         # Business logic
 └── util/            # JWT utilities
+
+miniprogram/         # 微信小程序端
+cloudfunctions/      # 微信云函数
 ```

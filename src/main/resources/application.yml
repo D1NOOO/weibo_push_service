@@ -20,10 +20,33 @@ jwt:
   expiration-ms: 86400000
 
 app:
+  wx:
+    appid: ${WX_APPID:}
+    secret: ${WX_SECRET:}
+    subscribe:
+      template-id: ${WX_SUBSCRIBE_TEMPLATE_ID:}
+      page: "pages/matches/index"
+      miniprogram-state: ${WX_MINIPROGRAM_STATE:formal}
+      # field-mapping 默认: keyword->thing1, rank->character_string2, hotValue->number3, time->time4
+    cloud:
+      invoke-mode: ${WX_CLOUD_INVOKE_MODE:http-trigger}   # http-trigger | openapi
+      http-trigger-url: ${WX_CLOUD_HTTP_TRIGGER_URL:}
+      env-id: ${WX_CLOUD_ENV_ID:}
+      function-name: sendSubscribeMessage
+      shared-secret: ${WX_CLOUD_SHARED_SECRET:}
+  match:
+    active-window-hours: 6        # 同一订阅+关键词在窗口内视为同一命中事件
+    notify-top-rank: 3            # 排名进入前 N 触发通知
+    notify-hot-growth-ratio: 2.0  # 热度较此前峰值增长超过该倍率触发通知
+    notify-labels: "爆,沸"        # 标签升级为这些值触发通知
   cors:
     allowed-origin-patterns: "http://localhost:8080,http://127.0.0.1:8080"
   schedule:
-    cron: "0 */10 * * * *"
+    interval-minutes: 10
+    zone: Asia/Shanghai
+  snapshot:
+    retention-days: 30
+    cleanup-cron: "0 30 3 * * *"
   dedupe:
     window-hours: 6
   fetcher:

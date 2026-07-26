@@ -1,0 +1,57 @@
+# 生产部署：docker compose -f docker-compose.prod.yml up -d --build
+# 小程序要求主服务经 HTTPS 固定域名访问，请在服务器上以 Nginx/Caddy 反代 28080 并配置证书。
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: weibo-hotsearch-mysql
+    environment:
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-hotsearch}
+      - MYSQL_USER=${MYSQL_USER:-hotsearch}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:?MYSQL_PASSWORD required}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD required}
+      - TZ=Asia/Shanghai
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  weibo-hotsearch:
+    image: weibo-hotsearch:latest
+    container_name: weibo-hotsearch
+    build: .
+    ports:
+      - "0.0.0.0:28080:8080"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - TZ=Asia/Shanghai
+      - SPRING_PROFILES_ACTIVE=prod
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET required}
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-hotsearch}
+      - MYSQL_USER=${MYSQL_USER:-hotsearch}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:?MYSQL_PASSWORD required}
+      - DDL_AUTO=${DDL_AUTO:-update}
+      # 微信小程序
+      - WX_APPID=${WX_APPID:-}
+      - WX_SECRET=${WX_SECRET:-}
+      - WX_SUBSCRIBE_TEMPLATE_ID=${WX_SUBSCRIBE_TEMPLATE_ID:-}
+      - WX_MINIPROGRAM_STATE=${WX_MINIPROGRAM_STATE:-formal}
+      # 云函数调用（http-trigger 模式只需 URL + 共享密钥）
+      - WX_CLOUD_INVOKE_MODE=${WX_CLOUD_INVOKE_MODE:-http-trigger}
+      - WX_CLOUD_HTTP_TRIGGER_URL=${WX_CLOUD_HTTP_TRIGGER_URL:-}
+      - WX_CLOUD_ENV_ID=${WX_CLOUD_ENV_ID:-}
+      - WX_CLOUD_SHARED_SECRET=${WX_CLOUD_SHARED_SECRET:-}
+      # 微博抓取 403 时配置 Cookie（DEPLOY.md Q1）；field-mapping 等高级覆盖用 SPRING_APPLICATION_JSON
+      - APP_FETCHER_COOKIE=${APP_FETCHER_COOKIE:-}
+      - SPRING_APPLICATION_JSON=${SPRING_APPLICATION_JSON:-}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped

@@ -4,7 +4,12 @@ import com.hotsearch.config.RateLimiter;
 import com.hotsearch.dto.ChangePasswordRequest;
 import com.hotsearch.dto.LoginRequest;
 import com.hotsearch.dto.TokenResponse;
+import com.hotsearch.dto.WxLoginRequest;
+import com.hotsearch.dto.WxLoginResponse;
+import com.hotsearch.entity.User;
+import com.hotsearch.repository.UserRepository;
 import com.hotsearch.service.AuthService;
+import com.hotsearch.service.WxAuthService;
 import com.hotsearch.util.JwtUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -13,6 +18,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 @RestController
@@ -21,11 +27,16 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService authService;
+    private final WxAuthService wxAuthService;
+    private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
     private final RateLimiter rateLimiter;
 
-    public AuthController(AuthService authService, JwtUtil jwtUtil, RateLimiter rateLimiter) {
+    public AuthController(AuthService authService, WxAuthService wxAuthService,
+                          UserRepository userRepository, JwtUtil jwtUtil, RateLimiter rateLimiter) {
         this.authService = authService;
+        this.wxAuthService = wxAuthService;
+        this.userRepository = userRepository;
         this.jwtUtil = jwtUtil;
         this.rateLimiter = rateLimiter;
     }
@@ -40,6 +51,34 @@ public class AuthController {
             throw new RuntimeException("登录尝试过于频繁，请在 " + waitSec + " 秒后重试");
         }
         return ResponseEntity.ok(authService.login(req));
+    }
+
+    @PostMapping("/wx-login")
+    @Operation(summary = "微信小程序登录", description = "提交 wx.login 获取的 code，返回主服务 JWT。首次登录自动创建用户。")
+    public ResponseEntity<WxLoginResponse> wxLogin(@Valid @RequestBody WxLoginRequest req,
+                                                   HttpServletRequest request) {
+        String clientIp = getClientIp(request);
+        if (!rateLimiter.tryAcquire("wx:" + clientIp)) {
+            long waitSec = rateLimiter.remainingSeconds("wx:" + clientIp);
+            throw new RuntimeException("登录尝试过于频繁，请在 " + waitSec + " 秒后重试");
+        }
+        return ResponseEntity.ok(wxAuthService.wxLogin(req));
+    }
+
+    @GetMapping("/me")
+    @Operation(summary = "获取当前用户信息")
+    public ResponseEntity<Map<String, Object>> me(@RequestHeader("Authorization") String authHeader) {
+        Long userId = jwtUtil.getUserId(authHeader.replace("Bearer ", ""));
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("用户不存在"));
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("userId", user.getId());
+        body.put("username", user.getUsername());
+        body.put("nickname", user.getNickname());
+        body.put("avatar", user.getAvatar());
+        body.put("role", user.getRole());
+        body.put("wxBound", user.getOpenid() != null && !user.getOpenid().isBlank());
+        return ResponseEntity.ok(body);
     }
 
     @PostMapping("/change-password")

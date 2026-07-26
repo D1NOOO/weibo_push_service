@@ -4,6 +4,8 @@ import com.hotsearch.dto.HotSearchItem;
 import com.hotsearch.entity.Subscription;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -14,8 +16,10 @@ public class SubscriptionMatcher {
 
     public List<MatchResult> match(List<HotSearchItem> items, List<Subscription> subscriptions) {
         List<MatchResult> results = new ArrayList<>();
+        LocalDateTime utcNow = LocalDateTime.now(ZoneOffset.UTC);
         for (Subscription sub : subscriptions) {
             if (!Boolean.TRUE.equals(sub.getEnabled())) continue;
+            if (!sub.isEffectiveAtUtc(utcNow)) continue;
             for (HotSearchItem item : items) {
                 if (hit(sub, item)) {
                     results.add(new MatchResult(sub, item));

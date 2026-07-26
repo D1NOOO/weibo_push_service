@@ -22,6 +22,12 @@ public class DingtalkProvider implements MessageProvider {
 
     @Override
     public void send(Channel channel, HotSearchItem primaryItem, List<HotSearchItem> allItems) {
+        send(channel, primaryItem, allItems, null, null);
+    }
+
+    @Override
+    public void send(Channel channel, HotSearchItem primaryItem, List<HotSearchItem> allItems,
+                     String target, String messageTitle) {
         Map<String, Object> config = channel.getConfigMap();
         String webhookUrl = (String) config.get("webhookUrl");
         if (webhookUrl == null || webhookUrl.isBlank()) {
@@ -30,7 +36,7 @@ public class DingtalkProvider implements MessageProvider {
 
         try {
             StringBuilder text = new StringBuilder();
-            text.append("🔥 微博热搜提醒\n\n");
+            text.append(MessageProvider.normalizeTitle(messageTitle)).append("\n\n");
             text.append("【").append(primaryItem.keyword()).append("】");
             if (primaryItem.label() != null) text.append(" [").append(primaryItem.label()).append("]");
             if (primaryItem.hotValue() != null) text.append(" — 热度 ").append(formatHeat(primaryItem.hotValue()));

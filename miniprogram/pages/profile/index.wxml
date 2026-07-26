@@ -1,0 +1,62 @@
+<view class="page">
+  <view class="section panel">
+    <view class="row" wx:if="{{loggedIn}}">
+      <view class="user-row">
+        <view class="avatar">{{user.nickname ? user.nickname[0] : "微"}}</view>
+        <view>
+          <view>{{user.nickname || "微信用户"}}</view>
+          <view class="meta">{{user.username}}</view>
+        </view>
+      </view>
+      <button class="button secondary" size="mini" bindtap="logout">退出</button>
+    </view>
+    <view class="row" wx:else>
+      <view>
+        <view>未登录</view>
+        <view class="meta">登录后同步订阅与提醒</view>
+      </view>
+      <button class="button primary" size="mini" bindtap="retryLogin">登录</button>
+    </view>
+  </view>
+
+  <view class="section panel" wx:if="{{loggedIn}}">
+    <view class="row">
+      <view class="section-title" style="margin-bottom: 0;">微信提醒额度</view>
+      <view class="badge {{quota && quota.availableCount > 0 ? 'badge-success' : 'badge-warn'}}">剩余 {{quota ? quota.availableCount : 0}} 次</view>
+    </view>
+    <view class="subtitle">一次授权可发送一条提醒。命中重要事件（首次上榜、标签升级、进入前排、热度激增）时消耗一次。高频通知建议在 Web 管理端配置飞书/钉钉等外部通道。</view>
+    <button class="button primary block-btn" bindtap="requestMessage" disabled="{{granting}}">开启提醒（授权 +1 次）</button>
+  </view>
+
+  <view class="section panel" wx:if="{{loggedIn}}">
+    <view class="section-title">通知通道</view>
+    <block wx:if="{{channels.length}}">
+      <view class="list-item" wx:for="{{channels}}" wx:key="id">
+        <view class="row">
+          <view class="grow">
+            <view>{{item.name}}</view>
+            <view class="meta">{{item.enabled ? "已启用" : "已停用"}}</view>
+          </view>
+          <button class="button secondary" size="mini" data-id="{{item.id}}" data-index="{{index}}" bindtap="testChannel" disabled="{{item.testing}}">{{item.testing ? "发送中…" : "测试"}}</button>
+          <switch checked="{{item.enabled}}" color="#111827" data-id="{{item.id}}" bindchange="toggleChannel" />
+        </view>
+      </view>
+    </block>
+    <view wx:else class="meta">暂无通道。点上方「开启提醒」自动创建小程序通知通道；飞书/钉钉/企微/Telegram 等外部通道请在 Web 管理端配置。</view>
+  </view>
+
+  <view class="section panel" wx:if="{{loggedIn && fetchStatus}}">
+    <view class="row">
+      <view class="section-title" style="margin-bottom: 0;">抓取状态</view>
+      <view class="badge {{fetchStatus.healthy ? 'badge-success' : 'badge-warn'}}">{{fetchStatus.healthy ? "正常" : "异常"}}</view>
+    </view>
+    <view class="meta" style="margin-top: 12rpx;">最近成功抓取：{{fetchStatus.lastText}}（{{fetchStatus.lastItemCount}} 条）</view>
+    <view class="meta">抓取间隔：{{fetchStatus.intervalMinutes}} 分钟 · 下次抓取：{{fetchStatus.nextText}}</view>
+  </view>
+
+  <view class="section panel">
+    <view class="section-title">关于</view>
+    <view class="meta">主服务地址：{{apiBaseUrl}}</view>
+    <view class="meta">数据抓取、匹配与通知策略均在主服务完成；云函数仅用于发送微信订阅消息。</view>
+  </view>
+</view>

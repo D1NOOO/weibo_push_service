@@ -6,7 +6,7 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "hot_search_snapshots")
+@Table(name = "hot_search_snapshots", indexes = @Index(name = "idx_hot_search_snapshots_fetched_at", columnList = "fetched_at"))
 public class HotSearchSnapshot {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
