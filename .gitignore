@@ -30,5 +30,9 @@ mvnw.cmd
 .env.*
 !.env.example
 
-# 内部工作文档（不随仓库分发）
+# Planning / design docs (not source code)
+AGENTS.md
+design-qa.md
+product-plan.md
+wx_RestfulAPI.md
 refactoring-plan.md
