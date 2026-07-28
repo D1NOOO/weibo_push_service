@@ -13,6 +13,14 @@
 - **趋势查询** 关键词排名历史趋势
 - **Web 管理界面** 管理订阅、通道、查看推送日志
 
+## 界面预览
+
+| 实时热搜与数据概览 | 24 小时热度趋势 |
+|---|---|
+| ![实时热搜榜、热度统计与趋势概览](./docs/images/hotsearch-dashboard.png) | ![热搜关键词 24 小时热度与排名趋势](./docs/images/hotsearch-trend.png) |
+| **订阅规则配置** | **多渠道推送配置** |
+| ![关键词、排除词、标签和最低热度订阅规则](./docs/images/subscription-rule.png) | ![飞书等消息通道与 Sink 短链接配置](./docs/images/push-channel.png) |
+
 ## 技术栈
 
 | 层 | 技术 |

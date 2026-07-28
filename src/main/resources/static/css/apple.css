@@ -159,17 +159,23 @@ header .btn:hover {
 .top-story {
     grid-column: 1 / -1;
     grid-row: 1;
+    position: relative;
     display: grid;
-    grid-template-columns: 120px minmax(0, 1fr) auto;
+    grid-template-columns: 120px minmax(0, 1fr);
+    column-gap: 40px;
     align-items: center;
     min-height: 238px;
     margin: 0 -32px;
     padding: 40px 32px;
+    overflow: hidden;
     background: #272729;
     color: #ffffff;
+    isolation: isolate;
 }
 
 .top-story-rank {
+    position: relative;
+    z-index: 2;
     color: var(--primary);
     font-family: "SF Pro Display", var(--font);
     font-size: clamp(68px, 7vw, 104px);
@@ -179,36 +185,81 @@ header .btn:hover {
     font-variant-numeric: tabular-nums;
 }
 
-.top-story-content { min-width: 0; }
+.top-story-content { position: relative; z-index: 2; min-width: 0; }
 .top-story-eyebrow { color: #cccccc; font-size: 14px; }
 .top-story h2 {
-    max-width: 900px;
+    max-width: none;
     margin: 12px 0 16px;
-    overflow: hidden;
+    overflow: visible;
     color: #ffffff;
     font-family: "SF Pro Display", var(--font);
     font-size: clamp(30px, 3.2vw, 48px);
     font-weight: 600;
     line-height: 1.1;
     letter-spacing: -0.025em;
+    text-overflow: clip;
+    white-space: normal;
+}
+
+.top-story-meta { display: flex; align-items: baseline; gap: 22px; color: #cccccc; font-size: 14px; }
+.top-story-meta strong { color: #2997ff; font-size: 22px; font-weight: 400; }
+
+.top-story-trend {
+    position: absolute;
+    right: 32px;
+    top: 42px;
+    z-index: 0;
+    width: min(50%, 720px);
+    min-width: 0;
+    padding: 10px 0 8px;
+    opacity: 0.52;
+}
+
+.top-story-trend-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 8px;
+    color: rgba(255, 255, 255, 0.58);
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.top-story-trend-header strong {
+    overflow: hidden;
+    color: rgba(255, 255, 255, 0.78);
+    font-weight: 400;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.top-story-meta { display: flex; gap: 22px; color: #cccccc; font-size: 14px; }
-.top-story-meta strong { color: #2997ff; font-size: 22px; font-weight: 400; }
-
-.top-story-link {
-    padding: 12px 0 12px 28px;
-    color: #2997ff;
-    background: transparent;
-    border: 0;
-    cursor: pointer;
-    font-size: 17px;
+.top-story-trend-chart {
+    position: relative;
+    height: 88px;
 }
 
-.top-story-link:disabled { color: #7a7a7a; cursor: default; }
-.top-story-link:not(:disabled):hover { text-decoration: underline; }
+.top-story-trend-chart canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+@media (max-width: 1120px) and (min-width: 901px) {
+    .top-story {
+        grid-template-columns: 100px minmax(0, 1fr);
+        min-height: 286px;
+    }
+
+    .top-story-trend {
+        position: relative;
+        top: auto;
+        right: auto;
+        grid-column: 2 / 3;
+        width: auto;
+        padding: 18px 0 0;
+        opacity: 1;
+    }
+}
 
 .freshness-banner {
     grid-column: 1 / 7;
@@ -942,8 +993,9 @@ input[type="checkbox"] {
     #tab-hotsearch .section-header { order: 5; }
     .hot-list-head { order: 6; }
     #hotsearch-list { order: 7; }
-    .top-story { grid-template-columns: 72px minmax(0, 1fr); min-height: 220px; margin: 0 -20px; padding: 30px 20px; }
-    .top-story-link { grid-column: 2; justify-self: start; padding-left: 0; }
+    .top-story { grid-template-columns: 72px minmax(0, 1fr); min-height: 280px; margin: 0 -20px; padding: 30px 20px; column-gap: 12px; }
+    .top-story-trend { position: relative; top: auto; right: auto; grid-column: 1 / -1; width: auto; padding: 18px 0 0; opacity: 1; }
+    .top-story-trend-chart { height: 72px; }
     .top-story h2 { white-space: normal; font-size: 30px; }
     .top-story-meta { flex-direction: column; gap: 4px; }
     .freshness-banner { margin-top: 24px; }
@@ -985,8 +1037,8 @@ header {
                 box-shadow var(--transition);
 }
 .btn:active { transform: scale(0.95); }
-.btn-trend:active, .top-story-link:not(:disabled):active, .tab:active { transform: scale(0.95); }
-.btn-trend, .top-story-link, .tab { transition: color 0.18s ease, border-color 0.18s ease, transform 0.1s ease-out; }
+.btn-trend:active, .tab:active { transform: scale(0.95); }
+.btn-trend, .tab { transition: color 0.18s ease, border-color 0.18s ease, transform 0.1s ease-out; }
 
 /* 标签页：下划线渐变过渡 */
 .tab:hover { border-bottom-color: rgba(0, 0, 0, 0.16); }

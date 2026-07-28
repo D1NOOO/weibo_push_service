@@ -59,7 +59,15 @@
                         <span id="top-story-status">等待更新</span>
                     </div>
                 </div>
-                <button id="btn-top-story-trend" class="top-story-link" type="button" disabled>查看趋势 ›</button>
+                <div id="top-story-trend" class="top-story-trend" aria-live="polite">
+                    <div class="top-story-trend-header">
+                        <span>近24小时走势</span>
+                        <strong id="top-story-trend-summary">等待数据</strong>
+                    </div>
+                    <div class="top-story-trend-chart">
+                        <canvas id="top-story-trend-chart" role="img" aria-label="当前最热话题近24小时热度趋势"></canvas>
+                    </div>
+                </div>
             </section>
 
             <!-- Stats + Label chart row -->

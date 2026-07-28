@@ -588,13 +588,11 @@ function updateTopStory(item) {
     const keyword = document.getElementById('top-story-keyword');
     const heat = document.getElementById('top-story-heat');
     const status = document.getElementById('top-story-status');
-    const trendButton = document.getElementById('btn-top-story-trend');
 
     keyword.textContent = item.keyword;
     heat.textContent = item.hotValue ? UTILS.formatNum(item.hotValue) : '暂无数据';
     status.textContent = item.label ? `当前排名第 1 位 · ${item.label}` : '当前排名第 1 位';
-    trendButton.disabled = false;
-    trendButton.onclick = () => showTrend(item.keyword);
+    void updateTopStoryTrend(item.keyword);
 }
 
 function updateStats(items) {
@@ -712,6 +710,163 @@ function downloadFile(content, filename, mimeType) {
 
 // ==================== Trend History ====================
 let trendHistoryChart = null;
+let topStoryTrendChart = null;
+let topStoryTrendKeyword = null;
+let topStoryTrendRequestId = 0;
+const trendDataCache = new Map();
+const trendDataRequests = new Map();
+const TREND_DATA_CACHE_TTL_MS = 90 * 1000;
+
+function getCachedTrend(keyword) {
+    const cached = trendDataCache.get(keyword);
+    return cached && Date.now() - cached.loadedAt < TREND_DATA_CACHE_TTL_MS ? cached.points : null;
+}
+
+async function getTrendPoints(keyword) {
+    const cached = getCachedTrend(keyword);
+    if (cached) return cached;
+    if (trendDataRequests.has(keyword)) return trendDataRequests.get(keyword);
+
+    const request = API.get(`/api/hotsearch/trend?keyword=${encodeURIComponent(keyword)}&hours=24`)
+        .then(trend => {
+            const points = [...trend].sort((a, b) => new Date(a.fetchedAt) - new Date(b.fetchedAt));
+            trendDataCache.set(keyword, { points, loadedAt: Date.now() });
+            return points;
+        })
+        .finally(() => trendDataRequests.delete(keyword));
+    trendDataRequests.set(keyword, request);
+    return request;
+}
+
+function destroyTopStoryTrendChart() {
+    if (!topStoryTrendChart) return;
+    topStoryTrendChart.destroy();
+    topStoryTrendChart = null;
+}
+
+function describeTrend(points) {
+    const heatPoints = points
+        .filter(point => point.hotValue != null)
+        .map(point => Number(point.hotValue))
+        .filter(value => Number.isFinite(value));
+
+    if (heatPoints.length < 2) return heatPoints.length ? '仅有 1 个数据点' : '暂无热度数据';
+
+    const first = heatPoints[0];
+    const last = heatPoints[heatPoints.length - 1];
+    if (first <= 0) return `当前 ${UTILS.formatNum(last)}`;
+
+    const changePercent = (last - first) / first * 100;
+    if (Math.abs(changePercent) < 0.5) return '整体基本持平';
+    return `${changePercent > 0 ? '整体上涨' : '整体下降'} ${Math.abs(changePercent).toFixed(1)}%`;
+}
+
+function renderTopStoryTrendChart(keyword, points) {
+    const canvas = document.getElementById('top-story-trend-chart');
+    if (!canvas || !window.Chart) return;
+
+    const drawablePoints = points.filter(point =>
+        point.hotValue != null && Number.isFinite(Number(point.hotValue))
+    );
+    if (!drawablePoints.length) return;
+
+    destroyTopStoryTrendChart();
+    const heatValues = drawablePoints.map(point => Number(point.hotValue));
+    const minHeat = Math.min(...heatValues);
+    const maxHeat = Math.max(...heatValues);
+    const range = Math.max(1, maxHeat - minHeat);
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    canvas.setAttribute('aria-label', `${keyword}近24小时热度趋势，${describeTrend(drawablePoints)}`);
+    topStoryTrendChart = new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels: drawablePoints.map(point => UTILS.formatTime(point.fetchedAt)),
+            datasets: [{
+                data: heatValues,
+                borderColor: 'rgba(41, 151, 255, 0.82)',
+                backgroundColor: 'rgba(41, 151, 255, 0.08)',
+                borderWidth: 2,
+                pointRadius: 0,
+                pointHoverRadius: 4,
+                pointHitRadius: 10,
+                pointBackgroundColor: '#272729',
+                pointBorderColor: '#2997ff',
+                pointBorderWidth: 2,
+                tension: 0.3,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            normalized: true,
+            interaction: { mode: 'index', intersect: false },
+            animation: { duration: reducedMotion ? 0 : 360 },
+            layout: { padding: { top: 6, right: 4, bottom: 4, left: 2 } },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    displayColors: false,
+                    backgroundColor: 'rgba(0, 0, 0, 0.82)',
+                    titleColor: 'rgba(255, 255, 255, 0.68)',
+                    bodyColor: '#ffffff',
+                    padding: 9,
+                    cornerRadius: 8,
+                    callbacks: {
+                        label: context => {
+                            const point = drawablePoints[context.dataIndex];
+                            return `${UTILS.formatNum(point.hotValue)} · 排名 #${point.rank}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: { display: false },
+                y: {
+                    display: false,
+                    min: Math.max(0, minHeat - range * 0.14),
+                    max: maxHeat + range * 0.14
+                }
+            }
+        }
+    });
+}
+
+async function updateTopStoryTrend(keyword) {
+    const summary = document.getElementById('top-story-trend-summary');
+    const container = document.getElementById('top-story-trend');
+    if (!summary || !container) return;
+
+    const cached = getCachedTrend(keyword);
+    if (keyword === topStoryTrendKeyword && topStoryTrendChart && cached) return;
+
+    const requestId = ++topStoryTrendRequestId;
+    const keywordChanged = keyword !== topStoryTrendKeyword;
+    topStoryTrendKeyword = keyword;
+    container.setAttribute('aria-busy', 'true');
+    if (keywordChanged || !topStoryTrendChart) {
+        destroyTopStoryTrendChart();
+        summary.textContent = '趋势加载中';
+    }
+
+    try {
+        const chartReady = await waitForChartJs();
+        if (!chartReady) throw new Error('图表组件不可用');
+        const points = await getTrendPoints(keyword);
+        if (requestId !== topStoryTrendRequestId || keyword !== topStoryTrendKeyword) return;
+
+        summary.textContent = describeTrend(points);
+        if (points.length) renderTopStoryTrendChart(keyword, points);
+    } catch (error) {
+        if (requestId === topStoryTrendRequestId) {
+            summary.textContent = '趋势暂不可用';
+            console.warn('Top story trend unavailable:', error);
+        }
+    } finally {
+        if (requestId === topStoryTrendRequestId) container.removeAttribute('aria-busy');
+    }
+}
 
 function destroyTrendHistoryChart() {
     if (!trendHistoryChart) return;
@@ -863,13 +1018,12 @@ window.showTrend = async function(keyword) {
     content.innerHTML = '<p class="trend-state">加载中...</p>';
     
     try {
-        const trend = await API.get(`/api/hotsearch/trend?keyword=${encodeURIComponent(keyword)}&hours=24`);
-        if (!trend.length) {
+        const points = await getTrendPoints(keyword);
+        if (!points.length) {
             content.innerHTML = `<p class="trend-state">“${UTILS.escape(keyword)}”近24小时内无数据</p>`;
             return;
         }
 
-        const points = [...trend].sort((a, b) => new Date(a.fetchedAt) - new Date(b.fetchedAt));
         const current = points[points.length - 1];
         const bestRank = Math.min(...points.map(point => point.rank || Number.MAX_SAFE_INTEGER));
         const accessiblePoints = points.map(point =>
