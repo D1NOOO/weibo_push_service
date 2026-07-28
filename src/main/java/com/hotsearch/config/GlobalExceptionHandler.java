@@ -9,7 +9,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Map;
 
 @RestControllerAdvice
@@ -40,7 +40,7 @@ public class GlobalExceptionHandler {
     private ResponseEntity<Map<String, Object>> buildError(HttpStatus status, String message) {
         return ResponseEntity.status(status).body(Map.of(
                 "message", message != null ? message : "未知错误",
-                "timestamp", LocalDateTime.now().toString()
+                "timestamp", Instant.now().toString()
         ));
     }
 }

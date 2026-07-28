@@ -792,6 +792,115 @@ input[type="checkbox"] {
 .modal-actions .btn { min-height: 44px; padding-inline: 22px; }
 .modal-actions .btn-primary { border-radius: 9999px; }
 
+/* ==================== 热搜排名趋势：连续折线图 ==================== */
+.history-modal-content { max-width: 760px !important; }
+
+.history-content {
+    min-height: 300px;
+    margin: 18px 0 0;
+    overflow: hidden;
+}
+
+.trend-title {
+    margin: 0 0 20px;
+    color: var(--text);
+    font-family: "SF Pro Display", var(--font);
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1.35;
+    letter-spacing: -0.015em;
+}
+
+.trend-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-bottom: 24px;
+    padding: 14px 0;
+    background: var(--bg-secondary);
+    border-radius: 18px;
+}
+
+.trend-summary-item {
+    min-width: 0;
+    padding: 0 18px;
+}
+
+.trend-summary-item + .trend-summary-item { border-left: 1px solid var(--border); }
+
+.trend-summary-item span,
+.trend-summary-item strong { display: block; }
+
+.trend-summary-item span {
+    margin-bottom: 4px;
+    color: var(--text-light);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.3;
+}
+
+.trend-summary-item strong {
+    overflow: hidden;
+    color: var(--text);
+    font-family: "SF Pro Display", var(--font);
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.trend-summary-item .trend-summary-primary { color: var(--primary); }
+
+.trend-chart-shell {
+    position: relative;
+    height: 310px;
+    min-height: 240px;
+}
+
+.trend-chart-shell canvas { width: 100% !important; height: 100% !important; }
+
+.trend-chart-status,
+.trend-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 260px;
+    margin: 0;
+    color: var(--text-light);
+    font-size: 13px;
+    text-align: center;
+}
+
+.trend-chart-status {
+    position: absolute;
+    inset: 0;
+    min-height: 0;
+    background: var(--card);
+}
+
+.trend-state-error { color: var(--danger); }
+
+.trend-chart-caption {
+    margin: 12px 0 0;
+    color: var(--text-light);
+    font-size: 12px;
+    line-height: 1.4;
+    text-align: center;
+}
+
+.visually-hidden {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+}
+
 @media (min-width: 901px) {
     #dashboard-page:not(.hidden) {
         display: grid;
@@ -994,6 +1103,15 @@ header {
         padding: 14px 20px calc(14px + env(safe-area-inset-bottom));
         border-radius: 0;
     }
+    .history-modal-content { max-height: 94vh; max-height: 94dvh; }
+    .history-content { min-height: 0; margin-top: 14px; overflow: visible; }
+    .trend-title { margin-bottom: 16px; font-size: 17px; }
+    .trend-summary { margin-bottom: 18px; padding: 12px 0; border-radius: 18px; }
+    .trend-summary-item { padding: 0 10px; }
+    .trend-summary-item span { font-size: 11px; }
+    .trend-summary-item strong { font-size: 18px; }
+    .trend-chart-shell { height: 260px; min-height: 220px; }
+    .trend-chart-caption { margin-top: 8px; font-size: 11px; }
 }
 @keyframes sheetUpIn { from { transform: translateY(100%); } to { transform: translateY(0); } }
 @keyframes sheetDownOut { to { transform: translateY(110%); } }

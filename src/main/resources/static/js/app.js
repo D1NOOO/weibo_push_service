@@ -175,19 +175,40 @@ const UTILS = {
         if (n >= 10000) return (n / 1000).toFixed(1) + 'k';
         return n.toLocaleString();
     },
-    formatTime(t) {
+    formatTime(t, referenceTime = Date.now()) {
         if (!t) return '-';
-        if (typeof t === 'number') t = new Date(t).toISOString();
-        const d = new Date(t.replace(' ', 'T') + (t.includes('Z') || t.includes('+') ? '' : 'Z'));
-        if (isNaN(d.getTime())) return '-';
-        const now = new Date();
-        const diff = now - d;
-        const minutes = Math.floor(diff / 60000);
+
+        const raw = typeof t === 'number' ? t : String(t).trim();
+        const normalized = typeof raw === 'string'
+            ? raw.replace(' ', 'T') + (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw) ? '' : 'Z')
+            : raw;
+        const d = new Date(normalized);
+        const now = new Date(referenceTime);
+        if (Number.isNaN(d.getTime()) || Number.isNaN(now.getTime())) return '-';
+
+        const formatDate = includeTime => {
+            const options = {
+                month: 'numeric',
+                day: 'numeric',
+                ...(d.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }),
+                ...(includeTime ? { hour: '2-digit', minute: '2-digit' } : {})
+            };
+            return new Intl.DateTimeFormat(undefined, options).format(d);
+        };
+
+        const diffMs = now.getTime() - d.getTime();
+        if (diffMs < 0) return formatDate(true);
+
+        const minutes = Math.floor(diffMs / 60000);
         if (minutes < 1) return '刚刚';
         if (minutes < 60) return `${minutes}分钟前`;
-        const hours = Math.floor(minutes / 60);
+
+        const hours = Math.floor(diffMs / 3600000);
         if (hours < 24) return `${hours}小时前`;
-        return d.toLocaleDateString('zh-CN') + ' ' + d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+
+        const days = Math.floor(diffMs / 86400000);
+        if (days < 3) return `${days}天前`;
+        return formatDate(false);
     },
     showToast(message, type = 'info') {
         const toast = document.getElementById('toast');
@@ -690,44 +711,209 @@ function downloadFile(content, filename, mimeType) {
 }
 
 // ==================== Trend History ====================
+let trendHistoryChart = null;
+
+function destroyTrendHistoryChart() {
+    if (!trendHistoryChart) return;
+    trendHistoryChart.destroy();
+    trendHistoryChart = null;
+}
+
+function waitForChartJs(timeoutMs = 4000) {
+    if (window.Chart) return Promise.resolve(true);
+
+    return new Promise(resolve => {
+        let settled = false;
+        const finish = ready => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            window.removeEventListener('chartjs-ready', handleReady);
+            resolve(ready);
+        };
+        const handleReady = () => finish(Boolean(window.Chart));
+        const timer = setTimeout(() => finish(false), timeoutMs);
+        window.addEventListener('chartjs-ready', handleReady, { once: true });
+        if (window.Chart) finish(true);
+    });
+}
+
+function renderTrendHistoryChart(points) {
+    const canvas = document.getElementById('history-trend-chart');
+    if (!canvas || !window.Chart) return;
+
+    destroyTrendHistoryChart();
+
+    const styles = getComputedStyle(document.documentElement);
+    const primary = styles.getPropertyValue('--primary').trim() || '#0066cc';
+    const border = styles.getPropertyValue('--border').trim() || '#e0e0e0';
+    const textLight = styles.getPropertyValue('--text-light').trim() || '#7a7a7a';
+    const card = styles.getPropertyValue('--card').trim() || '#ffffff';
+    const heatValues = points
+        .filter(point => point.hotValue != null)
+        .map(point => Number(point.hotValue))
+        .filter(value => Number.isFinite(value));
+    if (!heatValues.length) {
+        canvas.parentElement.innerHTML = '<p class="trend-state">暂无可绘制的热度数据</p>';
+        return;
+    }
+    const minHeat = Math.min(...heatValues);
+    const maxHeat = Math.max(...heatValues);
+    const heatRange = maxHeat - minHeat;
+    const roughStep = heatRange > 0 ? heatRange / 5 : Math.max(1, maxHeat * 0.05);
+    const stepMagnitude = 10 ** Math.floor(Math.log10(Math.max(1, roughStep)));
+    const normalizedStep = roughStep / stepMagnitude;
+    const heatStep = (normalizedStep <= 1 ? 1 : normalizedStep <= 2 ? 2 : normalizedStep <= 5 ? 5 : 10) * stepMagnitude;
+    let yMin = Math.max(0, Math.floor((minHeat - heatStep * 0.15) / heatStep) * heatStep);
+    let yMax = Math.ceil((maxHeat + heatStep * 0.15) / heatStep) * heatStep;
+    if (yMin === yMax) {
+        yMin = Math.max(0, yMin - heatStep);
+        yMax += heatStep;
+    }
+    const visibleLabelCount = Math.min(points.length, window.matchMedia('(max-width: 600px)').matches ? 4 : 5);
+    const visibleLabelIndexes = new Set(Array.from({ length: visibleLabelCount }, (_, index) =>
+        visibleLabelCount === 1 ? 0 : Math.round(index * (points.length - 1) / (visibleLabelCount - 1))
+    ));
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    trendHistoryChart = new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels: points.map(point => UTILS.formatTime(point.fetchedAt)),
+            datasets: [{
+                label: '热度',
+                data: points.map(point => point.hotValue != null && Number.isFinite(Number(point.hotValue)) ? Number(point.hotValue) : null),
+                borderColor: primary,
+                backgroundColor: primary,
+                borderWidth: 3,
+                pointRadius: points.length > 36 ? 0 : 3,
+                pointHoverRadius: 6,
+                pointHitRadius: 12,
+                pointBackgroundColor: card,
+                pointBorderColor: primary,
+                pointBorderWidth: 2,
+                tension: 0.24,
+                fill: false,
+                spanGaps: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            normalized: true,
+            interaction: { mode: 'index', intersect: false },
+            animation: { duration: reducedMotion ? 0 : 420 },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    displayColors: false,
+                    backgroundColor: '#1d1d1f',
+                    titleFont: { family: styles.getPropertyValue('--font').trim(), size: 12, weight: '400' },
+                    bodyFont: { family: styles.getPropertyValue('--font').trim(), size: 13, weight: '600' },
+                    padding: 10,
+                    cornerRadius: 8,
+                    callbacks: {
+                        title: contexts => contexts[0]?.label || '',
+                        label: context => {
+                            const point = points[context.dataIndex];
+                            const heat = point.hotValue ? UTILS.formatNum(point.hotValue) : '暂无热度';
+                            const label = point.label ? ` · ${point.label}` : '';
+                            return `${heat} · 排名 #${point.rank}${label}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    border: { display: false },
+                    grid: { display: false },
+                    ticks: {
+                        color: textLight,
+                        font: { size: 11 },
+                        maxRotation: 0,
+                        autoSkip: false,
+                        callback(value, index) {
+                            return visibleLabelIndexes.has(index) ? this.getLabelForValue(value) : '';
+                        }
+                    }
+                },
+                y: {
+                    min: yMin,
+                    max: yMax,
+                    border: { display: false },
+                    grid: { color: border, drawTicks: false },
+                    ticks: {
+                        color: textLight,
+                        font: { size: 11 },
+                        padding: 10,
+                        stepSize: heatStep,
+                        maxTicksLimit: 7,
+                        callback: value => UTILS.formatNum(value)
+                    }
+                }
+            }
+        }
+    });
+}
+
 window.showTrend = async function(keyword) {
     showModal('history-modal');
     const content = document.getElementById('history-content');
-    content.innerHTML = '<p style="font-size:13px;color:var(--text-light);text-align:center;padding:20px">加载中...</p>';
+    destroyTrendHistoryChart();
+    content.innerHTML = '<p class="trend-state">加载中...</p>';
     
     try {
-        const trend = await API.get(`/api/hotsearch/trend?keyword=${encodeURIComponent(keyword)}&hours=48`);
+        const trend = await API.get(`/api/hotsearch/trend?keyword=${encodeURIComponent(keyword)}&hours=24`);
         if (!trend.length) {
-            content.innerHTML = `<p style="text-align:center;color:var(--text-light);padding:20px;">"${UTILS.escape(keyword)}" 近48小时内无数据</p>`;
+            content.innerHTML = `<p class="trend-state">“${UTILS.escape(keyword)}”近24小时内无数据</p>`;
             return;
         }
-        
-        let html = `<h4 style="margin-bottom:16px;">"${UTILS.escape(keyword)}" 排名趋势</h4>`;
-        html += '<div class="trend-chart">';
-        
-        const maxRank = Math.max(...trend.map(t => t.rank || 1));
-        trend.forEach(point => {
-            const barWidth = Math.max(5, 100 - ((point.rank / maxRank) * 90));
-            const heatText = point.hotValue ? UTILS.formatNum(point.hotValue) : '';
-            const labelTag = point.label ? `<span class="hot-label ${UTILS.getLabelClass(point.label)}" style="font-size:10px;padding:1px 5px;">${UTILS.escape(point.label)}</span>` : '';
-            html += `
-                <div class="trend-row">
-                    <span class="trend-time">${UTILS.formatTime(point.fetchedAt)}</span>
-                    <span class="trend-rank">#${point.rank}</span>
-                    <div class="trend-bar" style="width: ${barWidth}%;"></div>
-                    <span class="trend-heat">${heatText}</span>
-                    ${labelTag}
-                </div>`;
-        });
-        
-        html += '</div>';
-        content.innerHTML = html;
+
+        const points = [...trend].sort((a, b) => new Date(a.fetchedAt) - new Date(b.fetchedAt));
+        const current = points[points.length - 1];
+        const bestRank = Math.min(...points.map(point => point.rank || Number.MAX_SAFE_INTEGER));
+        const accessiblePoints = points.map(point =>
+            `<li>${UTILS.formatTime(point.fetchedAt)}，排名第${point.rank}${point.hotValue ? `，热度${UTILS.formatNum(point.hotValue)}` : ''}</li>`
+        ).join('');
+
+        content.innerHTML = `
+            <h4 class="trend-title">“${UTILS.escape(keyword)}”热度趋势</h4>
+            <div class="trend-summary" aria-label="趋势摘要">
+                <div class="trend-summary-item">
+                    <span>当前排名</span>
+                    <strong class="trend-summary-primary">#${current.rank}</strong>
+                </div>
+                <div class="trend-summary-item">
+                    <span>最佳排名</span>
+                    <strong>#${bestRank}</strong>
+                </div>
+                <div class="trend-summary-item">
+                    <span>当前热度</span>
+                    <strong>${current.hotValue ? UTILS.formatNum(current.hotValue) : '—'}</strong>
+                </div>
+            </div>
+            <div class="trend-chart-shell">
+                <canvas id="history-trend-chart" role="img" aria-label="${UTILS.escape(keyword)}近24小时热度折线图"></canvas>
+                <p class="trend-chart-status">图表加载中...</p>
+            </div>
+            <p class="trend-chart-caption">纵轴为热度 · 悬停或轻触数据点查看排名</p>
+            <ol class="visually-hidden">${accessiblePoints}</ol>`;
+
+        const chartReady = await waitForChartJs();
+        const chartStatus = content.querySelector('.trend-chart-status');
+        if (!chartReady) {
+            if (chartStatus) chartStatus.textContent = '图表组件加载失败，请刷新后重试';
+            return;
+        }
+        chartStatus?.remove();
+        renderTrendHistoryChart(points);
     } catch (e) {
-        content.innerHTML = `<p style="text-align:center;color:var(--danger);">加载失败: ${UTILS.escape(e.message)}</p>`;
+        content.innerHTML = `<p class="trend-state trend-state-error">加载失败：${UTILS.escape(e.message)}</p>`;
     }
 };
 
 document.getElementById('btn-close-history').addEventListener('click', () => {
+    destroyTrendHistoryChart();
     hideModal('history-modal');
 });
 
@@ -835,33 +1021,35 @@ function invalidateChannelsCache() {
 // ==================== Subscription Functions ====================
 let editingSubscriptionId = null;
 
-function beijingInputToIso(value) {
+function localInputToIso(value) {
     if (!value) return null;
     const normalized = value.length === 16 ? `${value}:00` : value;
-    const date = new Date(`${normalized}+08:00`);
+    const date = new Date(normalized);
     return isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-function isoToBeijingInput(value) {
+function isoToLocalInput(value) {
     if (!value) return '';
     const date = new Date(value);
     if (isNaN(date.getTime())) return '';
-    return new Date(date.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 19);
+    const pad = part => String(part).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+        + `T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-function formatBeijingDateTime(value) {
+function formatLocalDateTime(value) {
     if (!value) return '长期';
     const date = new Date(value);
     if (isNaN(date.getTime())) return '-';
-    return new Intl.DateTimeFormat('zh-CN', {
-        timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+    return new Intl.DateTimeFormat(undefined, {
+        year: 'numeric', month: '2-digit', day: '2-digit',
         hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
     }).format(date);
 }
 
 function subscriptionValidityText(sub) {
     if (!sub.startAt && !sub.endAt) return '长期有效';
-    return `${sub.startAt ? formatBeijingDateTime(sub.startAt) : '长期'} 至 ${sub.endAt ? formatBeijingDateTime(sub.endAt) : '长期'}`;
+    return `${sub.startAt ? formatLocalDateTime(sub.startAt) : '长期'} 至 ${sub.endAt ? formatLocalDateTime(sub.endAt) : '长期'}`;
 }
 
 function loadSubscriptions() {
@@ -928,7 +1116,7 @@ function loadSubscriptions() {
                         }</div>
                     ` : ''}
                     <div class="item-meta">
-                        有效期（北京时间）: ${subscriptionValidityText(sub)}<br>
+                        有效期（本地时间）: ${subscriptionValidityText(sub)}<br>
                         标签过滤: ${sub.labels?.join(', ') || '无'} • 最低热度: ${sub.minHotValue || '不限'} • 推送: ${sub.channelIds?.length ? `已选${sub.channelIds.length}个通道` : '全部通道'} • 创建: ${UTILS.formatTime(sub.createdAt)}
                     </div>
                     <div class="item-actions">
@@ -960,8 +1148,8 @@ function showSubscriptionModal(subscription = null) {
         document.getElementById('sub-exclude').value = subscription.excludeKeywords?.join(', ') || '';
         document.getElementById('sub-labels').value = subscription.labels?.join(', ') || '';
         document.getElementById('sub-min-hot').value = subscription.minHotValue || 0;
-        document.getElementById('sub-start-at').value = isoToBeijingInput(subscription.startAt);
-        document.getElementById('sub-end-at').value = isoToBeijingInput(subscription.endAt);
+        document.getElementById('sub-start-at').value = isoToLocalInput(subscription.startAt);
+        document.getElementById('sub-end-at').value = isoToLocalInput(subscription.endAt);
         document.getElementById('sub-enabled').checked = subscription.enabled !== false;
     } else {
         form.reset();
@@ -999,8 +1187,8 @@ document.getElementById('btn-add-sub').addEventListener('click', () => showSubsc
 document.getElementById('sub-form').addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    const startAt = beijingInputToIso(document.getElementById('sub-start-at').value);
-    const endAt = beijingInputToIso(document.getElementById('sub-end-at').value);
+    const startAt = localInputToIso(document.getElementById('sub-start-at').value);
+    const endAt = localInputToIso(document.getElementById('sub-end-at').value);
     if (startAt && endAt && new Date(startAt) >= new Date(endAt)) {
         UTILS.showToast('结束时间必须晚于开始时间', 'error');
         return;
@@ -1080,7 +1268,7 @@ function loadExpiredSubscriptions() {
                 </div>
                 ${sub.keywords?.length ? `<div class="item-tags">${sub.keywords.map(k => `<span class="tag">${UTILS.escape(k)}</span>`).join('')}</div>` : ''}
                 <div class="item-meta">
-                    有效期（北京时间）: ${subscriptionValidityText(sub)} • 状态: 已过期
+                    有效期（本地时间）: ${subscriptionValidityText(sub)} • 状态: 已过期
                 </div>
             </div>
         `).join('');

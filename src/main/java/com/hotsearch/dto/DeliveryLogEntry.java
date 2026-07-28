@@ -1,6 +1,6 @@
 package com.hotsearch.dto;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 public record DeliveryLogEntry(
@@ -8,13 +8,13 @@ public record DeliveryLogEntry(
     String label,
     Long hotValue,
     List<ChannelDelivery> channels,
-    LocalDateTime deliveredAt
+    Instant deliveredAt
 ) {
     public record ChannelDelivery(
         String provider,
         String target,
         String status,
         String error,
-        LocalDateTime deliveredAt
+        Instant deliveredAt
     ) {}
 }

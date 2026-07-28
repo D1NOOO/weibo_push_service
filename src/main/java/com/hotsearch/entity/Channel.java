@@ -4,6 +4,7 @@ import com.hotsearch.entity.converter.JsonMapConverter;
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -32,7 +33,7 @@ public class Channel {
     private LocalDateTime createdAt;
 
     public Channel() {
-        this.createdAt = LocalDateTime.now();
+        this.createdAt = LocalDateTime.now(ZoneOffset.UTC);
     }
 
     public Long getId() { return id; }

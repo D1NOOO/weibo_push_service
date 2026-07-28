@@ -139,9 +139,9 @@
                         <input type="text" id="sub-labels" placeholder="例如：热,新,爆">
                         <label>最低热度值</label>
                         <input type="number" id="sub-min-hot" value="0" min="0">
-                        <label>开始时间（北京时间 UTC+8，可选）</label>
+                        <label>开始时间（本地时间，可选）</label>
                         <input type="datetime-local" id="sub-start-at" step="1">
-                        <label>结束时间（北京时间 UTC+8，可选）</label>
+                        <label>结束时间（本地时间，可选）</label>
                         <input type="datetime-local" id="sub-end-at" step="1">
                         <div class="hint-text">精确到秒；不设置开始或结束时间表示该方向长期有效，到达结束时间后立即停止推送。</div>
                         <label>推送通道</label>
@@ -370,11 +370,11 @@
     </div>
 
     <!-- 热搜历史趋势模态框 -->
-    <div id="history-modal" class="modal hidden">
-        <div class="modal-content" style="max-width: 800px;">
-            <h3>热搜历史趋势</h3>
-            <div id="history-content" style="margin: 15px 0; max-height: 500px; overflow-y: auto;">
-                <p style="font-size: 13px; color: var(--text-light); text-align: center; padding: 20px;">加载中...</p>
+    <div id="history-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="history-modal-title">
+        <div class="modal-content history-modal-content">
+            <h3 id="history-modal-title">热搜历史趋势</h3>
+            <div id="history-content" class="history-content" aria-live="polite">
+                <p class="trend-state">加载中...</p>
             </div>
             <div class="modal-actions">
                 <button type="button" class="btn" id="btn-close-history">关闭</button>

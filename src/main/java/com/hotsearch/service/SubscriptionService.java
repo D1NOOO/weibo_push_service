@@ -112,7 +112,7 @@ public class SubscriptionService {
     private SubscriptionResponse toResponse(Subscription s) {
         return new SubscriptionResponse(s.getId(), s.getName(), s.getKeywords(),
                 s.getExcludeKeywords(), s.getLabels(), s.getMinHotValue(), s.getChannelIds(), s.getEnabled(),
-                s.getCreatedAt(), toInstant(s.getStartAt()), toInstant(s.getEndAt()));
+                toInstant(s.getCreatedAt()), toInstant(s.getStartAt()), toInstant(s.getEndAt()));
     }
 
     public List<Subscription> listAllEnabled() {

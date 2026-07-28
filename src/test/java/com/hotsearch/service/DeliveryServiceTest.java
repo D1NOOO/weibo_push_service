@@ -7,6 +7,7 @@ import com.hotsearch.repository.ChannelRepository;
 import com.hotsearch.repository.DeliveryLogRepository;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -56,7 +57,7 @@ class DeliveryServiceTest {
         assertThat(entries).extracting(DeliveryLogEntry::keyword)
                 .containsExactly("世界杯", "演唱会");
         DeliveryLogEntry worldCup = entries.get(0);
-        assertThat(worldCup.deliveredAt()).isEqualTo(LocalDateTime.parse("2026-07-20T10:00:00"));
+        assertThat(worldCup.deliveredAt()).isEqualTo(Instant.parse("2026-07-20T10:00:00Z"));
         assertThat(worldCup.channels()).hasSize(2);
         assertThat(worldCup.channels().get(0).provider()).isEqualTo("wechat");
     }

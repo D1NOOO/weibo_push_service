@@ -10,6 +10,9 @@ import com.hotsearch.repository.SubscriptionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -99,7 +102,11 @@ public class ChannelService {
 
     private ChannelResponse toResponse(Channel ch, boolean includeSecrets) {
         Map<String, Object> config = includeSecrets ? ch.getConfigMap() : maskConfig(ch.getConfigMap());
-        return new ChannelResponse(ch.getId(), ch.getProvider(), config, ch.getEnabled(), ch.getCreatedAt());
+        return new ChannelResponse(ch.getId(), ch.getProvider(), config, ch.getEnabled(), toInstant(ch.getCreatedAt()));
+    }
+
+    private Instant toInstant(LocalDateTime value) {
+        return value == null ? null : value.toInstant(ZoneOffset.UTC);
     }
 
     private Map<String, Object> maskConfig(Map<String, Object> config) {

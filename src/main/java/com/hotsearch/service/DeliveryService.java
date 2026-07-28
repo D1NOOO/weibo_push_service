@@ -8,6 +8,7 @@ import com.hotsearch.repository.DeliveryLogRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -86,7 +87,7 @@ public class DeliveryService {
                                 log.getTarget(),
                                 log.getStatus(),
                                 log.getError(),
-                                log.getDeliveredAt()
+                                toInstant(log.getDeliveredAt())
                         ));
                     }
 
@@ -95,9 +96,13 @@ public class DeliveryService {
                             latest.getLabel(),
                             latest.getHotValue(),
                             channelDeliveries,
-                            latest.getDeliveredAt()
+                            toInstant(latest.getDeliveredAt())
                     );
                 })
                 .toList();
+    }
+
+    private Instant toInstant(LocalDateTime value) {
+        return value == null ? null : value.toInstant(ZoneOffset.UTC);
     }
 }

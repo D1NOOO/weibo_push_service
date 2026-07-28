@@ -7,13 +7,17 @@ spring:
     driver-class-name: org.sqlite.JDBC
   jpa:
     database-platform: org.hibernate.community.dialect.SQLiteDialect
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
     hibernate:
       ddl-auto: update
     show-sql: false
     open-in-view: false
   jackson:
     date-format: yyyy-MM-dd HH:mm:ss
-    time-zone: Asia/Shanghai
+    time-zone: UTC
 
 jwt:
   secret: ${JWT_SECRET}
