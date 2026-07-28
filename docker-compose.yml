@@ -4,7 +4,7 @@ services:
     container_name: weibo-hotsearch
     build: .
     ports:
-      - "127.0.0.1:28080:8080"
+      - "0.0.0.0:28080:8080"
     volumes:
       # 容器以非 root 用户（uid=100, gid=101）运行；Linux 宿主机首次启动前请执行:
       #   mkdir -p data && sudo chown -R 100:101 data
