@@ -1322,7 +1322,7 @@ function showSubscriptionModal(subscription = null) {
                 <label class="checkbox-label channel-picker-item">
                     <input type="checkbox" class="sub-ch-cb" value="${ch.id}"
                         ${selectedIds.includes(ch.id) ? 'checked' : ''}>
-                    ${getProviderLabel(ch.provider)} ${ch.provider === 'wechat' ? '→ ' + UTILS.escape(ch.config?.chat || '未配置') : ''}
+                    ${getProviderLabel(ch.provider)} ${ch.provider === 'wechat' ? '→ ' + UTILS.escape(ch.config?.chat || '未配置') : ''}${ch.provider === 'wechatWebhook' ? '→ ' + UTILS.escape(ch.config?.wxIdList || '未配置') : ''}
                 </label>
             `).join('');
         } else {
@@ -1515,6 +1515,7 @@ function getProviderLabel(provider) {
         dingtalk: '钉钉 Webhook',
         wecom: '企业微信',
         wechat: '微信机器人',
+        wechatWebhook: '微信 Webhook（Gateway）',
         telegram: 'Telegram Bot',
         generic: '通用 Webhook'
     };
@@ -1536,6 +1537,9 @@ function describeChannelConfig(ch) {
     if (ch.provider === 'wechat') {
         return `目标聊天: ${UTILS.escape(config.chat || '未配置')} · API: ${UTILS.escape(config.apiBaseUrl || 'http://localhost:5001')}${shortLink}`;
     }
+    if (ch.provider === 'wechatWebhook') {
+        return `接收对象: ${UTILS.escape(config.wxIdList || '未配置')} · Webhook: ${maskWebhookUrl(config.webhookUrl || '')}${shortLink}`;
+    }
     if (ch.provider === 'feishu' && config.mode === 'app') {
         return `自建应用: ${UTILS.escape(config.appId || '未配置')} · 接收: ${UTILS.escape(config.receiveId || config.token || '未配置')}${shortLink}`;
     }
@@ -1556,12 +1560,14 @@ function updateProviderHint() {
     const fieldFeishuApp = document.getElementById('ch-field-feishu-app');
     const fieldTelegram = document.getElementById('ch-field-telegram');
     const fieldWechat = document.getElementById('ch-field-wechat');
+    const fieldWechatWebhook = document.getElementById('ch-field-wechat-webhook');
 
     const hints = {
         feishu: '提示：飞书群机器人 → 添加机器人 → 复制自定义机器人 Webhook 地址',
         dingtalk: '提示：钉钉群机器人 → 安全设置 → Webhook → 复制带 access_token 的地址',
         wecom: '提示：企业微信群 → 添加群机器人 → 复制 key 参数形式的 Webhook 地址',
         wechat: '提示：通过 WeChatBot RESTful API 发送微信消息',
+        wechatWebhook: '提示：通过 Dino WeChat Gateway 的 /webhooks/v1/{sourceKey} 通知入口发送微信消息',
         telegram: '提示：Telegram 需要 Bot Token 和 Chat ID，本服务会直接调用 sendMessage API',
         generic: '提示：任意支持 POST JSON 的 HTTP/HTTPS 端点'
     };
@@ -1588,12 +1594,14 @@ function updateProviderHint() {
         fieldFeishuApp.style.display = '';
         fieldTelegram.style.display = 'none';
         fieldWechat.style.display = 'none';
+        fieldWechatWebhook.style.display = 'none';
         hintEl.textContent = '提示：自建应用机器人：App ID + App Secret 获取 tenant_access_token，再向接收 ID 发送消息';
     } else if (provider === 'feishu') {
         fieldWebhook.style.display = '';
         fieldFeishuApp.style.display = 'none';
         fieldTelegram.style.display = 'none';
         fieldWechat.style.display = 'none';
+        fieldWechatWebhook.style.display = 'none';
         hintEl.textContent = hints.feishu;
         urlLabel.textContent = labels.feishu;
         webhookInput.placeholder = placeholders.feishu;
@@ -1603,18 +1611,28 @@ function updateProviderHint() {
         fieldFeishuApp.style.display = 'none';
         fieldTelegram.style.display = 'none';
         fieldWechat.style.display = '';
+        fieldWechatWebhook.style.display = 'none';
         hintEl.textContent = hints.wechat;
+    } else if (provider === 'wechatWebhook') {
+        fieldWebhook.style.display = 'none';
+        fieldFeishuApp.style.display = 'none';
+        fieldTelegram.style.display = 'none';
+        fieldWechat.style.display = 'none';
+        fieldWechatWebhook.style.display = '';
+        hintEl.textContent = hints.wechatWebhook;
     } else if (provider === 'telegram') {
         fieldWebhook.style.display = 'none';
         fieldFeishuApp.style.display = 'none';
         fieldTelegram.style.display = '';
         fieldWechat.style.display = 'none';
+        fieldWechatWebhook.style.display = 'none';
         hintEl.textContent = hints.telegram;
     } else {
         fieldWebhook.style.display = '';
         fieldFeishuApp.style.display = 'none';
         fieldTelegram.style.display = 'none';
         fieldWechat.style.display = 'none';
+        fieldWechatWebhook.style.display = 'none';
         hintEl.textContent = hints[provider] || '请填写通道配置';
         urlLabel.textContent = labels[provider] || '配置';
         webhookInput.placeholder = placeholders[provider] || placeholders.generic;
@@ -1645,6 +1663,11 @@ function showChannelModal(channel = null) {
             document.getElementById('ch-wechat-api').value = channel.config?.apiBaseUrl || 'http://localhost:5001';
             document.getElementById('ch-wechat-token').value = channel.config?.token || '';
             document.getElementById('ch-wechat-chat').value = channel.config?.chat || '';
+        } else if (channel.provider === 'wechatWebhook') {
+            document.getElementById('ch-wechat-webhook-url').value = channel.config?.webhookUrl || '';
+            document.getElementById('ch-wechat-webhook-token').value = channel.config?.token || '';
+            document.getElementById('ch-wechat-webhook-header').value = channel.config?.tokenHeader || 'X-Webhook-Token';
+            document.getElementById('ch-wechat-webhook-targets').value = channel.config?.wxIdList || '';
         } else if (channel.provider === 'telegram') {
             document.getElementById('ch-telegram-token').value = channel.config?.token || '';
             document.getElementById('ch-telegram-chat').value = channel.config?.chatId || '';
@@ -1658,6 +1681,7 @@ function showChannelModal(channel = null) {
         document.getElementById('ch-feishu-mode').value = 'webhook';
         document.getElementById('ch-feishu-receive-id-type').value = 'chat_id';
         document.getElementById('ch-wechat-api').value = 'http://localhost:5001';
+        document.getElementById('ch-wechat-webhook-header').value = 'X-Webhook-Token';
         document.getElementById('ch-enabled').checked = true;
     }
     
@@ -1703,6 +1727,13 @@ document.getElementById('ch-form').addEventListener('submit', async (e) => {
             apiBaseUrl: document.getElementById('ch-wechat-api').value.trim() || 'http://localhost:5001',
             token: document.getElementById('ch-wechat-token').value.trim(),
             chat: document.getElementById('ch-wechat-chat').value.trim()
+        };
+    } else if (provider === 'wechatWebhook') {
+        config = {
+            webhookUrl: document.getElementById('ch-wechat-webhook-url').value.trim(),
+            token: document.getElementById('ch-wechat-webhook-token').value.trim(),
+            tokenHeader: document.getElementById('ch-wechat-webhook-header').value.trim() || 'X-Webhook-Token',
+            wxIdList: document.getElementById('ch-wechat-webhook-targets').value.trim()
         };
     } else if (provider === 'telegram') {
         config = {
@@ -1835,7 +1866,7 @@ function renderLogEntry(entry) {
 function shortProviderName(provider) {
     const names = {
         feishu: '飞书', dingtalk: '钉钉', wecom: '企微',
-        wechat: '微信', telegram: 'Telegram', generic: 'Webhook'
+        wechat: '微信', wechatWebhook: '微信Hook', telegram: 'Telegram', generic: 'Webhook'
     };
     return names[provider] || provider;
 }

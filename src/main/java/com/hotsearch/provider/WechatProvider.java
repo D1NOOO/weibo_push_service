@@ -77,22 +77,6 @@ public class WechatProvider implements MessageProvider {
     }
 
     String buildMessage(List<HotSearchItem> allItems, String messageTitle) {
-        StringBuilder text = new StringBuilder();
-        text.append(MessageFormats.normalizeTitle(messageTitle)).append("\n\n");
-
-        for (int i = 0; i < allItems.size(); i++) {
-            HotSearchItem item = allItems.get(i);
-            text.append(i + 1).append(": ").append(item.keyword());
-            if (item.label() != null) text.append(" [").append(item.label()).append("]");
-            if (item.hotValue() != null) text.append(" 热度").append(MessageFormats.formatHeat(item.hotValue()));
-            text.append(" 排名#").append(item.rank());
-            if (item.isAd()) text.append(" (广告)");
-            if (item.url() != null && !item.url().isBlank()) {
-                text.append("\n🔗").append(item.url());
-            }
-            text.append("\n");
-            if (i < allItems.size() - 1) text.append("\n");
-        }
-        return text.toString();
+        return MessageFormats.buildPlainText(allItems, messageTitle);
     }
 }

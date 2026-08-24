@@ -7,7 +7,7 @@
 - **定时抓取** 微博热搜榜，按整分钟刻度执行并保存历史快照
 - **自动清理** 可配置数据保留天数，过期的热搜快照与推送日志自动删除，避免数据库无限增长
 - **灵活订阅** 支持关键词（含正则/前缀匹配）、排除词、标签过滤（爆/热/新）、最低热度阈值
-- **多渠道推送** 飞书卡片消息、钉钉、企业微信、Telegram、通用 Webhook
+- **多渠道推送** 飞书卡片消息、钉钉、企业微信、微信 Gateway Webhook、Telegram、通用 Webhook
 - **批量推送** 一次匹配多条热搜合并为一条消息
 - **智能去重** 可配置的去重窗口，避免重复推送
 - **趋势查询** 关键词排名历史趋势
@@ -119,6 +119,7 @@ app:
 | 钉钉 | `webhookUrl` — 钉钉机器人 Webhook 地址 |
 | 企业微信 | `webhookUrl` — 企微机器人 Webhook 地址 |
 | 微信机器人 | `apiBaseUrl` + `token` + `chat`；可选 `shortLinkEnabled` |
+| 微信 Gateway Webhook | `webhookUrl` + `token` + `wxIdList`；可选 `tokenHeader`（默认 `X-Webhook-Token`） |
 | Telegram | `token` + `chatId` — Bot Token 和 Chat ID |
 | 通用 Webhook | `webhookUrl` — 任意 HTTP POST 端点 |
 
@@ -128,7 +129,7 @@ app:
 
 1. 按 Sink 文档部署 Workers、绑定自定义域名，并配置 `NUXT_SITE_TOKEN`。
 2. 在“系统配置 → Sink 短链服务”填写 `Sink Base URL`（例如 `https://s.example.com`）和与 `NUXT_SITE_TOKEN` 相同的 `Sink Site Token`。
-3. 编辑任意推送通道，勾选“使用 Sink 短链接”。飞书、钉钉、企业微信、微信机器人、Telegram 和通用 Webhook 均支持。
+3. 编辑任意推送通道，勾选“使用 Sink 短链接”。飞书、钉钉、企业微信、微信机器人、微信 Gateway Webhook、Telegram 和通用 Webhook 均支持。
 
 仅当通道开关启用且全局 Sink 配置完整时才会缩短微博 URL。Sink 不可用或返回异常时，本次推送自动保留原始长链接，消息不会因短链服务故障而中断。旧版保存在微信通道中的 Sink 凭据会在启动时自动迁移到全局配置。
 

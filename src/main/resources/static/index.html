@@ -193,6 +193,7 @@
                             <option value="dingtalk">钉钉 Webhook</option>
                             <option value="wecom">企业微信 Webhook</option>
                             <option value="wechat">微信机器人</option>
+                            <option value="wechatWebhook">微信 Webhook（Gateway）</option>
                             <option value="telegram">Telegram Bot</option>
                             <option value="generic">通用 Webhook</option>
                         </select>
@@ -242,6 +243,18 @@
                             <label>目标聊天名称</label>
                             <input type="text" id="ch-wechat-chat" placeholder="好友昵称 或 群聊名称">
                             <div class="hint-text">提示：多个聊天用逗号分隔，如：张三,项目通知群</div>
+                        </div>
+                        <!-- Dino WeChat Gateway Webhook 专属字段 -->
+                        <div id="ch-field-wechat-webhook" style="display:none;">
+                            <label>Webhook URL</label>
+                            <input type="text" id="ch-wechat-webhook-url" placeholder="http://127.0.0.1:19099/webhooks/v1/weibo-hotsearch">
+                            <label>Header Token</label>
+                            <input type="text" id="ch-wechat-webhook-token" placeholder="Webhook 通知入口配置的 Token">
+                            <label>鉴权 Header</label>
+                            <input type="text" id="ch-wechat-webhook-header" placeholder="X-Webhook-Token" value="X-Webhook-Token">
+                            <label>微信接收对象</label>
+                            <input type="text" id="ch-wechat-webhook-targets" placeholder="filehelper, wxid_example, 123456789@chatroom">
+                            <div class="hint-text">提示：填写微信 wxid、群聊 ID 或 filehelper，多个对象用逗号或换行分隔</div>
                         </div>
                         <div id="ch-provider-hint" class="hint-text">提示：飞书群机器人 → 添加机器人 → 复制 Webhook 地址</div>
                         <div class="modal-subcard">

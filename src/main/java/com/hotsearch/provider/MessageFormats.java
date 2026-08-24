@@ -1,8 +1,11 @@
 package com.hotsearch.provider;
 
+import com.hotsearch.dto.HotSearchItem;
+
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 /** provider 共用的文案格式化工具。 */
 final class MessageFormats {
@@ -25,5 +28,25 @@ final class MessageFormats {
 
     static String shortDisplayTime() {
         return LocalDateTime.now(DISPLAY_ZONE).format(SHORT_TIME);
+    }
+
+    static String buildPlainText(List<HotSearchItem> items, String title) {
+        StringBuilder text = new StringBuilder();
+        text.append(normalizeTitle(title)).append("\n\n");
+
+        for (int i = 0; i < items.size(); i++) {
+            HotSearchItem item = items.get(i);
+            text.append(i + 1).append(": ").append(item.keyword());
+            if (item.label() != null) text.append(" [").append(item.label()).append("]");
+            if (item.hotValue() != null) text.append(" 热度").append(formatHeat(item.hotValue()));
+            text.append(" 排名#").append(item.rank());
+            if (item.isAd()) text.append(" (广告)");
+            if (item.url() != null && !item.url().isBlank()) {
+                text.append("\n🔗").append(item.url());
+            }
+            text.append("\n");
+            if (i < items.size() - 1) text.append("\n");
+        }
+        return text.toString();
     }
 }
